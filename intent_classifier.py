@@ -9,6 +9,12 @@ import json
 import logging
 import os
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file (for local development)
+# This must happen before any GenAI Hub SDK imports that read AICORE_* vars
+load_dotenv()
+
 from topic_links import TOPIC_LINKS, get_topics_for_prompt
 
 # Lazy imports for GenAI Hub SDK (may not be available locally)
