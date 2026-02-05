@@ -123,6 +123,8 @@ Rules:
                     ProfileEntity.EMAIL,
                     ProfileEntity.PHONE,
                     ProfileEntity.ADDRESS,
+                    ProfileEntity.SAP_IDS_INTERNAL,
+                    ProfileEntity.SAP_IDS_PUBLIC,
                 ]
             )]
         )
