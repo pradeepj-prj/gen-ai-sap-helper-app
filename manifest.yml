@@ -13,4 +13,4 @@ applications:
     env:
       PYTHON_VERSION: 3.11.x
     services:
-      - aicore-service  # Bind to existing AI Core service instance
+      - default_aicore  # Bind to existing AI Core service instance

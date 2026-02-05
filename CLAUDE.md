@@ -46,3 +46,18 @@ uvicorn app:app --reload
 6. Employee Onboarding
 7. Time & Attendance
 8. Employee Central
+
+## Features
+- **Dynamic Summaries** - LLM generates query-specific, natural language summaries
+- **Pipeline Visibility** - Add `?pipeline=true` to see orchestration details
+- **Content Filtering** - Azure Content Safety filters harmful content
+- **Data Masking** - PII anonymization via SAP Data Privacy Integration
+
+## Cloud Foundry Deployment
+- **App name:** tm-intent-classifier
+- **Region:** AP10 (Australia)
+- **API endpoint:** https://api.cf.ap10.hana.ondemand.com
+- **Service binding:** default_aicore (AI Core)
+- **Health check:** /health
+
+See `CF_COMMANDS.md` for deployment commands.
