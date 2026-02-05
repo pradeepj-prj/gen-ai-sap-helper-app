@@ -12,7 +12,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from intent_classifier import get_classifier
-from models import ClassifyRequest, ClassifyResponse, HealthResponse, LinkInfo
+from models import (
+    ClassifyRequest,
+    ClassifyResponse,
+    ContentFilteringDetails,
+    ContentFilterScores,
+    DataMaskingDetails,
+    HealthResponse,
+    LinkInfo,
+    LLMDetails,
+    LLMMessage,
+    PipelineDetails,
+)
 
 # Configure logging
 logging.basicConfig(
@@ -100,6 +111,9 @@ async def classify_query(request: ClassifyRequest):
     2. Identify the specific topic (e.g., Performance Management, Learning)
     3. Return relevant SAP Help Portal links
 
+    Set `show_pipeline: true` to include orchestration pipeline details (data masking,
+    content filtering, LLM info) for demo purposes.
+
     **Example Request:**
     ```json
     {
@@ -121,7 +135,23 @@ async def classify_query(request: ClassifyRequest):
     """
     try:
         classifier = get_classifier()
-        result = classifier.classify(request.query)
+        result = classifier.classify(request.query, include_pipeline=request.show_pipeline)
+
+        # Build pipeline details if requested
+        pipeline = None
+        if request.show_pipeline and "pipeline" in result:
+            pipeline_data = result["pipeline"]
+            pipeline = PipelineDetails(
+                data_masking=DataMaskingDetails(**pipeline_data["data_masking"])
+                if pipeline_data.get("data_masking")
+                else None,
+                content_filtering=ContentFilteringDetails(
+                    input=ContentFilterScores(**pipeline_data["content_filtering"]["input"]),
+                    output=ContentFilterScores(**pipeline_data["content_filtering"]["output"]),
+                ),
+                llm=LLMDetails(**pipeline_data["llm"]),
+                messages_to_llm=[LLMMessage(**msg) for msg in pipeline_data["messages_to_llm"]],
+            )
 
         return ClassifyResponse(
             is_talent_management=result["is_talent_management"],
@@ -130,6 +160,7 @@ async def classify_query(request: ClassifyRequest):
             topic_display_name=result["topic_display_name"],
             links=[LinkInfo(**link) for link in result["links"]],
             summary=result["summary"],
+            pipeline=pipeline,
         )
     except Exception as e:
         logger.error(f"Classification failed: {e}")

@@ -13,6 +13,7 @@ Uses Orchestration Service V2 features:
 
 import json
 import logging
+import re
 
 from dotenv import load_dotenv
 
@@ -42,9 +43,12 @@ try:
     from gen_ai_hub.orchestration.models.sap_data_privacy_integration import (
         SAPDataPrivacyIntegration, MaskingMethod, ProfileEntity
     )
+    # Exception for content filtering blocks
+    from gen_ai_hub.orchestration.exceptions import OrchestrationError
     GENAI_HUB_AVAILABLE = True
 except ImportError:
     GENAI_HUB_AVAILABLE = False
+    OrchestrationError = Exception  # Fallback for type checking
 
 logger = logging.getLogger(__name__)
 
@@ -146,12 +150,13 @@ Rules:
             logger.info("Classifier will use mock responses for local testing")
             self._service = None
 
-    def classify(self, query: str) -> dict:
+    def classify(self, query: str, include_pipeline: bool = False) -> dict:
         """
         Classify a user query.
 
         Args:
             query: The user's query text
+            include_pipeline: Whether to include orchestration pipeline details
 
         Returns:
             Dictionary with classification results
@@ -169,17 +174,32 @@ Rules:
         try:
             if self._service is None:
                 # Mock response for local testing without GenAI Hub
-                return self._mock_classify(query)
+                result = self._mock_classify(query)
+                if include_pipeline:
+                    result["pipeline"] = self._mock_pipeline_details(query)
+                return result
 
             # Run orchestration with template values
-            result = self._service.run(
+            orch_result = self._service.run(
                 template_values=[TemplateValue(name="user_query", value=query)]
             )
 
             # ResponseFormatJsonSchema guarantees valid JSON - no markdown stripping needed
-            llm_result = json.loads(result.orchestration_result.choices[0].message.content)
-            return self._format_response(llm_result)
+            llm_result = json.loads(orch_result.orchestration_result.choices[0].message.content)
+            response = self._format_response(llm_result)
 
+            if include_pipeline:
+                response["pipeline"] = self._extract_pipeline_details(query, orch_result)
+
+            return response
+
+        except OrchestrationError as e:
+            # Content filtering blocked the request - extract pipeline details from exception
+            logger.warning(f"Orchestration blocked: {e}")
+            response = self._content_filtered_response(query, str(e))
+            if include_pipeline:
+                response["pipeline"] = self._extract_pipeline_from_error(query, e)
+            return response
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response: {e}")
             return self._fallback_response(query)
@@ -212,6 +232,93 @@ Rules:
                 "links": [],
                 "summary": "This query doesn't appear to be related to Talent Management.",
             }
+
+    def _extract_pipeline_details(self, original_query: str, result) -> dict:
+        """Extract pipeline processing details from orchestration result."""
+        mr = result.module_results
+
+        # Extract masked query and entities from input_masking
+        masked_query = original_query
+        entities_masked = []
+        if mr.input_masking and mr.input_masking.data:
+            masked_template = mr.input_masking.data.get("masked_template", "")
+            # Extract entity types like MASKED_PERSON, MASKED_EMAIL
+            entities_masked = list(set(re.findall(r"MASKED_(\w+)", masked_template)))
+            # Try to extract the masked user query from the template
+            # The template structure is: system message + user message with masked content
+            if "Classify this query:" in masked_template:
+                match = re.search(r"Classify this query:\s*(.+?)(?:\n|$)", masked_template)
+                if match:
+                    masked_query = match.group(1).strip()
+
+        # Extract messages sent to LLM from templating module
+        messages_to_llm = []
+        if mr.templating:
+            for msg in mr.templating:
+                messages_to_llm.append({"role": msg.role, "content": msg.content})
+
+        # Extract content filtering scores
+        input_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True}
+        output_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True}
+
+        if mr.input_filtering and mr.input_filtering.data:
+            azure_scores = mr.input_filtering.data.get("azure_content_safety", {})
+            input_filter = {
+                "hate": azure_scores.get("Hate", 0),
+                "self_harm": azure_scores.get("SelfHarm", 0),
+                "sexual": azure_scores.get("Sexual", 0),
+                "violence": azure_scores.get("Violence", 0),
+                "passed": True,
+            }
+
+        if mr.output_filtering and mr.output_filtering.data:
+            choices = mr.output_filtering.data.get("choices", [{}])
+            if choices:
+                azure_scores = choices[0].get("azure_content_safety", {})
+                output_filter = {
+                    "hate": azure_scores.get("Hate", 0),
+                    "self_harm": azure_scores.get("SelfHarm", 0),
+                    "sexual": azure_scores.get("Sexual", 0),
+                    "violence": azure_scores.get("Violence", 0),
+                    "passed": True,
+                }
+
+        # Extract LLM details
+        orch = result.orchestration_result
+        llm_details = {
+            "model": orch.model if hasattr(orch, "model") else "unknown",
+            "prompt_tokens": orch.usage.prompt_tokens if hasattr(orch, "usage") and orch.usage else 0,
+            "completion_tokens": orch.usage.completion_tokens if hasattr(orch, "usage") and orch.usage else 0,
+        }
+
+        return {
+            "data_masking": {
+                "original_query": original_query,
+                "masked_query": masked_query,
+                "entities_masked": entities_masked,
+            } if entities_masked else None,
+            "content_filtering": {
+                "input": input_filter,
+                "output": output_filter,
+            },
+            "llm": llm_details,
+            "messages_to_llm": messages_to_llm,
+        }
+
+    def _mock_pipeline_details(self, query: str) -> dict:
+        """Generate mock pipeline details for local testing."""
+        return {
+            "data_masking": None,  # No masking in mock mode
+            "content_filtering": {
+                "input": {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True},
+                "output": {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True},
+            },
+            "llm": {"model": "mock", "prompt_tokens": 0, "completion_tokens": 0},
+            "messages_to_llm": [
+                {"role": "system", "content": "[MOCK] System prompt would appear here"},
+                {"role": "user", "content": f"Classify this query: {query}"},
+            ],
+        }
 
     def _mock_classify(self, query: str) -> dict:
         """Mock classification for local testing without GenAI Hub."""
@@ -342,6 +449,76 @@ Rules:
             "topic_display_name": None,
             "links": [],
             "summary": "Unable to classify the query. Please try again or rephrase your question.",
+        }
+
+    def _content_filtered_response(self, query: str, error_message: str) -> dict:
+        """Response when content filtering blocks the request."""
+        return {
+            "is_talent_management": False,
+            "confidence": 0.0,
+            "topic": None,
+            "topic_display_name": None,
+            "links": [],
+            "summary": "Your query was blocked by content filtering. Please rephrase your question.",
+        }
+
+    def _extract_pipeline_from_error(self, original_query: str, error: "OrchestrationError") -> dict:
+        """Extract pipeline details from an OrchestrationError (e.g., content filter block)."""
+        # Access module_results from the exception
+        mr = getattr(error, "module_results", {}) or {}
+
+        # Extract masked query if available
+        # Structure: input_masking -> data -> masked_template
+        masked_query = original_query
+        entities_masked = []
+        input_masking = mr.get("input_masking", {})
+        if input_masking:
+            masking_data = input_masking.get("data", {})
+            masked_template = masking_data.get("masked_template", "")
+            entities_masked = list(set(re.findall(r"MASKED_(\w+)", masked_template)))
+            if "Classify this query:" in masked_template:
+                match = re.search(r"Classify this query:\s*(.+?)(?:\n|$)", masked_template)
+                if match:
+                    masked_query = match.group(1).strip()
+
+        # Extract input filtering scores (this is where the block happened)
+        # Structure: input_filtering -> data -> azure_content_safety
+        input_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True}
+        input_filtering = mr.get("input_filtering", {})
+        if input_filtering:
+            filter_data = input_filtering.get("data", {})
+            azure_scores = filter_data.get("azure_content_safety", {})
+            input_filter = {
+                "hate": azure_scores.get("Hate", 0),
+                "self_harm": azure_scores.get("SelfHarm", 0),
+                "sexual": azure_scores.get("Sexual", 0),
+                "violence": azure_scores.get("Violence", 0),
+                "passed": False,  # Content was blocked
+            }
+
+        # Output filtering won't have run if input was blocked
+        output_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": False}
+
+        # Extract templating messages if available
+        messages_to_llm = []
+        templating = mr.get("templating", [])
+        if templating:
+            for msg in templating:
+                if isinstance(msg, dict):
+                    messages_to_llm.append({"role": msg.get("role", ""), "content": msg.get("content", "")})
+
+        return {
+            "data_masking": {
+                "original_query": original_query,
+                "masked_query": masked_query,
+                "entities_masked": entities_masked,
+            } if entities_masked else None,
+            "content_filtering": {
+                "input": input_filter,
+                "output": output_filter,
+            },
+            "llm": {"model": "blocked", "prompt_tokens": 0, "completion_tokens": 0},
+            "messages_to_llm": messages_to_llm,
         }
 
 
