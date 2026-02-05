@@ -1,13 +1,18 @@
 """
-Intent Classifier using SAP GenAI Hub SDK
+Intent Classifier using SAP GenAI Hub Orchestration Service V2
 
 This module handles the LLM-based classification of user queries to determine
 if they relate to Talent Management and identify the specific topic.
+
+Uses Orchestration Service V2 features:
+- Structured prompts (SystemMessage/UserMessage)
+- JSON schema response formatting (guaranteed valid JSON)
+- Content filtering (Azure Content Safety)
+- Data masking (PII anonymization)
 """
 
 import json
 import logging
-import os
 
 from dotenv import load_dotenv
 
@@ -17,78 +22,129 @@ load_dotenv()
 
 from topic_links import TOPIC_LINKS, get_topics_for_prompt
 
-# Lazy imports for GenAI Hub SDK (may not be available locally)
+# Lazy imports for GenAI Hub Orchestration SDK (may not be available locally)
 try:
-    from gen_ai_hub.proxy.core.proxy_clients import get_proxy_client
-    from gen_ai_hub.proxy.native.openai import OpenAI
+    from gen_ai_hub.orchestration.service import OrchestrationService
+    from gen_ai_hub.orchestration.models.message import SystemMessage, UserMessage
+    from gen_ai_hub.orchestration.models.template import Template, TemplateValue
+    from gen_ai_hub.orchestration.models.llm import LLM
+    from gen_ai_hub.orchestration.models.config import OrchestrationConfig
+    from gen_ai_hub.orchestration.models.response_format import ResponseFormatJsonSchema
+    # Content filtering imports
+    from gen_ai_hub.orchestration.models.content_filtering import (
+        ContentFiltering, InputFiltering, OutputFiltering
+    )
+    from gen_ai_hub.orchestration.models.azure_content_filter import (
+        AzureContentFilter, AzureThreshold
+    )
+    # Data masking imports
+    from gen_ai_hub.orchestration.models.data_masking import DataMasking
+    from gen_ai_hub.orchestration.models.sap_data_privacy_integration import (
+        SAPDataPrivacyIntegration, MaskingMethod, ProfileEntity
+    )
     GENAI_HUB_AVAILABLE = True
 except ImportError:
     GENAI_HUB_AVAILABLE = False
-    get_proxy_client = None
-    OpenAI = None
 
 logger = logging.getLogger(__name__)
 
+# JSON schema for classification response - ensures valid, structured output
+CLASSIFICATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_talent_management": {"type": "boolean"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "topic": {"type": ["string", "null"]},
+        "reasoning": {"type": "string"}
+    },
+    "required": ["is_talent_management", "confidence", "topic", "reasoning"],
+    "additionalProperties": False
+}
+
 
 class IntentClassifier:
-    """Classifies user queries into Talent Management topics using GPT-4."""
+    """Classifies user queries into Talent Management topics using GPT-4 via Orchestration Service."""
 
     def __init__(self):
-        """Initialize the classifier with GenAI Hub client."""
-        self._llm = None
+        """Initialize the classifier with GenAI Hub Orchestration Service."""
+        self._service = None
         self._initialize_client()
 
-    def _initialize_client(self):
-        """Initialize the GenAI Hub proxy client and LLM."""
-        if not GENAI_HUB_AVAILABLE:
-            logger.info("GenAI Hub SDK not available - using mock classification")
-            self._llm = None
-            return
-
-        try:
-            # GenAI Hub SDK automatically picks up credentials from:
-            # 1. Environment variables (AICORE_*)
-            # 2. CF service binding (VCAP_SERVICES)
-            proxy_client = get_proxy_client("gen-ai-hub")
-
-            self._llm = OpenAI(proxy_client=proxy_client)
-            logger.info("GenAI Hub client initialized successfully")
-        except Exception as e:
-            logger.warning(f"Failed to initialize GenAI Hub client: {e}")
-            logger.info("Classifier will use mock responses for local testing")
-            self._llm = None
-
-    def _build_classification_prompt(self, query: str) -> str:
-        """Build the prompt for classification."""
+    def _create_template(self) -> "Template":
+        """Create the prompt template with system and user messages."""
         topics_list = get_topics_for_prompt()
 
-        return f"""You are an expert at classifying HR and Talent Management queries.
-
-Analyze the following user query and determine:
-1. Whether it relates to SAP SuccessFactors Talent Management
-2. If yes, which specific topic it belongs to
-
+        return Template(
+            messages=[
+                SystemMessage(content=f"""You are an expert at classifying HR and Talent Management queries.
 Available Talent Management topics:
 {topics_list}
-
-User Query: "{query}"
-
-Respond with a JSON object in this exact format:
-{{
-    "is_talent_management": true/false,
-    "confidence": 0.0-1.0,
-    "topic": "topic_key_or_null",
-    "reasoning": "brief explanation"
-}}
 
 Rules:
 - If the query is clearly about Talent Management, set is_talent_management to true
 - Choose the single most relevant topic from the list above
-- If the query is ambiguous or could relate to multiple topics, choose the most likely one
-- If the query is NOT about Talent Management (e.g., IT support, general questions), set is_talent_management to false and topic to null
-- Confidence should reflect how certain you are about the classification
+- If ambiguous, choose the most likely topic
+- If NOT about Talent Management, set is_talent_management to false and topic to null
+- Confidence should reflect classification certainty (0.0-1.0)"""),
+                UserMessage(content="Classify this query: {{?user_query}}")
+            ],
+            response_format=ResponseFormatJsonSchema(
+                name="classification_result",
+                description="Intent classification result",
+                schema=CLASSIFICATION_SCHEMA
+            )
+        )
 
-Respond ONLY with the JSON object, no additional text."""
+    def _create_content_filter(self) -> "ContentFiltering":
+        """Configure Azure Content Safety filtering for input and output."""
+        azure_filter = AzureContentFilter(
+            hate=AzureThreshold.ALLOW_SAFE,
+            violence=AzureThreshold.ALLOW_SAFE,
+            self_harm=AzureThreshold.ALLOW_SAFE,
+            sexual=AzureThreshold.ALLOW_SAFE
+        )
+
+        return ContentFiltering(
+            input_filtering=InputFiltering(filters=[azure_filter]),
+            output_filtering=OutputFiltering(filters=[azure_filter])
+        )
+
+    def _create_data_masking(self) -> "DataMasking":
+        """Configure PII masking using SAP Data Privacy Integration."""
+        return DataMasking(
+            providers=[SAPDataPrivacyIntegration(
+                method=MaskingMethod.ANONYMIZATION,
+                entities=[
+                    ProfileEntity.PERSON,
+                    ProfileEntity.EMAIL,
+                    ProfileEntity.PHONE,
+                    ProfileEntity.ADDRESS,
+                ]
+            )]
+        )
+
+    def _initialize_client(self):
+        """Initialize the GenAI Hub Orchestration Service with all modules."""
+        if not GENAI_HUB_AVAILABLE:
+            logger.info("GenAI Hub SDK not available - using mock classification")
+            self._service = None
+            return
+
+        try:
+            # Create orchestration config with all modules
+            config = OrchestrationConfig(
+                template=self._create_template(),
+                llm=LLM(name="gpt-4o", parameters={"max_tokens": 500}),
+                filtering=self._create_content_filter(),
+                data_masking=self._create_data_masking()
+            )
+
+            self._service = OrchestrationService(config=config)
+            logger.info("GenAI Hub Orchestration service initialized successfully")
+        except Exception as e:
+            logger.warning(f"Failed to initialize orchestration service: {e}")
+            logger.info("Classifier will use mock responses for local testing")
+            self._service = None
 
     def classify(self, query: str) -> dict:
         """
@@ -111,30 +167,21 @@ Respond ONLY with the JSON object, no additional text."""
             }
 
         try:
-            if self._llm is None:
+            if self._service is None:
                 # Mock response for local testing without GenAI Hub
                 return self._mock_classify(query)
 
-            prompt = self._build_classification_prompt(query)
-            response = self._llm.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.1,
-                max_tokens=500,
+            # Run orchestration with template values
+            result = self._service.run(
+                template_values=[TemplateValue(name="user_query", value=query)]
             )
 
-            # Parse the JSON response (strip markdown code blocks if present)
-            content = response.choices[0].message.content.strip()
-            if content.startswith("```"):
-                # Remove markdown code block wrapper
-                lines = content.split("\n")
-                content = "\n".join(lines[1:-1]) if lines[-1] == "```" else "\n".join(lines[1:])
-            result = json.loads(content)
-
-            return self._format_response(result)
+            # ResponseFormatJsonSchema guarantees valid JSON - no markdown stripping needed
+            llm_result = json.loads(result.orchestration_result.choices[0].message.content)
+            return self._format_response(llm_result)
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse LLM response: {e}. Raw: {response.choices[0].message.content[:200] if response else 'None'}")
+            logger.error(f"Failed to parse LLM response: {e}")
             return self._fallback_response(query)
         except Exception as e:
             logger.error(f"Classification error: {e}")
