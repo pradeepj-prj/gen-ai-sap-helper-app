@@ -14,6 +14,7 @@ A FastAPI application that classifies user queries related to SAP SuccessFactors
 - `intent_classifier.py` - GenAI Hub SDK integration for LLM classification
 - `topic_links.py` - 8 TM topics mapped to SAP Help Portal URLs
 - `models.py` - Pydantic request/response schemas
+- `JOULE_SKILL.md` - Joule Skill configuration and trigger phrases
 
 ## Running Locally
 ```bash
@@ -61,3 +62,25 @@ uvicorn app:app --reload
 - **Health check:** /health
 
 See `CF_COMMANDS.md` for deployment commands.
+
+## Joule Integration
+
+### Integration Stack
+```
+User → Joule → tm-help Skill → SAP Build Action → BTP Destination → API
+```
+
+### Components
+| Component | Status | Details |
+|-----------|--------|---------|
+| API | Deployed | Cloud Foundry (tm-intent-classifier) |
+| BTP Destination | Created | Points to CF app URL |
+| SAP Build Action | Published | Uses OpenAPI spec from `/openapi.json` |
+| Joule Skill | Configured | See `JOULE_SKILL.md` |
+
+### Joule Skill: `tm-help`
+- **Trigger phrases**: "Help me with {query}", "How do I {query}", etc.
+- **Menu trigger**: "Talent management help" (shows 8 topics)
+- **Demo mode**: "Show me how TM classification works" (exposes pipeline)
+
+See `JOULE_SKILL.md` for complete skill configuration, response templates, and test cases.

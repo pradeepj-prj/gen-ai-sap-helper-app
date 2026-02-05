@@ -1,0 +1,321 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Talent Management Intent Classifier",
+    "description": "Classifies user queries related to SAP SuccessFactors Talent Management and returns relevant help portal links.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://tm-intent-classifier.cfapps.ap10.hana.ondemand.com",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/api/v1/classify": {
+      "post": {
+        "tags": ["Classification"],
+        "summary": "Classify a user query",
+        "description": "Analyzes a user query to determine if it relates to Talent Management and identifies the specific topic.",
+        "operationId": "classifyQuery",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful classification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassifyResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health Check",
+        "description": "Health check endpoint for monitoring.",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ClassifyRequest": {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "The user query to classify",
+            "example": "How do I submit my annual performance review?"
+          },
+          "show_pipeline": {
+            "type": "boolean",
+            "default": false,
+            "description": "Include orchestration pipeline details in response (for demos)"
+          }
+        }
+      },
+      "ClassifyResponse": {
+        "type": "object",
+        "required": ["is_talent_management", "confidence", "summary"],
+        "properties": {
+          "is_talent_management": {
+            "type": "boolean",
+            "description": "Whether the query relates to Talent Management"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Confidence score of the classification (0.0 to 1.0)"
+          },
+          "topic": {
+            "type": "string",
+            "nullable": true,
+            "description": "The identified topic key (e.g., 'performance_management')"
+          },
+          "topic_display_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Human-readable topic name (e.g., 'Performance Management')"
+          },
+          "links": {
+            "type": "array",
+            "description": "Relevant SAP Help Portal links",
+            "items": {
+              "$ref": "#/components/schemas/LinkInfo"
+            }
+          },
+          "summary": {
+            "type": "string",
+            "description": "A brief summary message about the classification result"
+          },
+          "pipeline": {
+            "$ref": "#/components/schemas/PipelineDetails"
+          }
+        }
+      },
+      "LinkInfo": {
+        "type": "object",
+        "required": ["title", "url", "description"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Title of the help resource"
+          },
+          "url": {
+            "type": "string",
+            "description": "URL to the SAP Help Portal page"
+          },
+          "description": {
+            "type": "string",
+            "description": "Brief description of the resource"
+          }
+        }
+      },
+      "PipelineDetails": {
+        "type": "object",
+        "nullable": true,
+        "description": "Orchestration pipeline processing details (when show_pipeline=true)",
+        "properties": {
+          "data_masking": {
+            "$ref": "#/components/schemas/DataMaskingDetails"
+          },
+          "content_filtering": {
+            "$ref": "#/components/schemas/ContentFilteringDetails"
+          },
+          "llm": {
+            "$ref": "#/components/schemas/LLMDetails"
+          },
+          "messages_to_llm": {
+            "type": "array",
+            "description": "Exact messages sent to the LLM",
+            "items": {
+              "$ref": "#/components/schemas/LLMMessage"
+            }
+          }
+        }
+      },
+      "DataMaskingDetails": {
+        "type": "object",
+        "nullable": true,
+        "description": "PII masking details (null if no PII detected)",
+        "properties": {
+          "original_query": {
+            "type": "string",
+            "description": "Original user query"
+          },
+          "masked_query": {
+            "type": "string",
+            "description": "Query after PII anonymization"
+          },
+          "entities_masked": {
+            "type": "array",
+            "description": "Types of PII detected and masked",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ContentFilteringDetails": {
+        "type": "object",
+        "description": "Input and output content filter results",
+        "properties": {
+          "input": {
+            "$ref": "#/components/schemas/ContentFilterScores"
+          },
+          "output": {
+            "$ref": "#/components/schemas/ContentFilterScores"
+          }
+        }
+      },
+      "ContentFilterScores": {
+        "type": "object",
+        "description": "Content safety scores from Azure Content Safety",
+        "properties": {
+          "hate": {
+            "type": "integer",
+            "description": "Hate speech score (0=safe)"
+          },
+          "self_harm": {
+            "type": "integer",
+            "description": "Self-harm content score"
+          },
+          "sexual": {
+            "type": "integer",
+            "description": "Sexual content score"
+          },
+          "violence": {
+            "type": "integer",
+            "description": "Violence content score"
+          },
+          "passed": {
+            "type": "boolean",
+            "description": "Whether content passed filtering"
+          }
+        }
+      },
+      "LLMDetails": {
+        "type": "object",
+        "description": "Details about the LLM processing",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Model used for classification (e.g., gpt-4o)"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "description": "Number of tokens in the prompt"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "description": "Number of tokens in the response"
+          }
+        }
+      },
+      "LLMMessage": {
+        "type": "object",
+        "description": "A message in the LLM conversation",
+        "properties": {
+          "role": {
+            "type": "string",
+            "description": "Message role (system or user)"
+          },
+          "content": {
+            "type": "string",
+            "description": "Message content"
+          }
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "required": ["status", "service", "version"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Health status of the service"
+          },
+          "service": {
+            "type": "string",
+            "description": "Name of the service"
+          },
+          "version": {
+            "type": "string",
+            "description": "API version"
+          }
+        }
+      },
+      "HTTPValidationError": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            }
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "properties": {
+          "loc": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Location of the error"
+          },
+          "msg": {
+            "type": "string",
+            "description": "Error message"
+          },
+          "type": {
+            "type": "string",
+            "description": "Error type"
+          }
+        }
+      }
+    }
+  }
+}
