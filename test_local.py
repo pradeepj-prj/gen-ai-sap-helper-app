@@ -1,102 +1,365 @@
 #!/usr/bin/env python3
 """
-Local test script for the intent classifier.
+Local test script for the SAP AI Documentation Assistant.
 
-Run this to validate the mock classification logic works before
-setting up the full GenAI Hub integration.
+Run this to validate the knowledge base, search function, KB management,
+and mock assistant logic before deploying with the full GenAI Hub integration.
 """
 
+import json
+import copy
 import sys
+
 sys.path.insert(0, ".")
 
-from topic_links import get_topics_for_prompt, TOPIC_LINKS
+from knowledge_base import (
+    load_knowledge_base,
+    search_knowledge_base,
+    get_docs_by_ids,
+    get_all_doc_ids,
+    get_services_summary,
+    get_all_entries,
+    get_available_services,
+    add_entry,
+    update_entry,
+    delete_entry,
+    save_knowledge_base,
+    _invalidate_cache,
+)
 
 
-def test_topic_links():
-    """Test that topic links are properly defined."""
-    print("=== Testing Topic Links ===\n")
+def test_kb_loading():
+    """Test that the knowledge base loads correctly from JSON."""
+    print("=== Testing KB Loading ===\n")
 
-    assert len(TOPIC_LINKS) == 8, f"Expected 8 topics, got {len(TOPIC_LINKS)}"
-    print(f"✓ Found {len(TOPIC_LINKS)} topics")
+    _invalidate_cache()
+    kb = load_knowledge_base()
 
-    for key, info in TOPIC_LINKS.items():
-        assert "display_name" in info, f"Missing display_name for {key}"
-        assert "keywords" in info, f"Missing keywords for {key}"
-        assert "links" in info, f"Missing links for {key}"
-        assert len(info["links"]) >= 1, f"No links for {key}"
-        print(f"  ✓ {key}: {info['display_name']} ({len(info['links'])} links)")
+    assert "services" in kb, "KB should have 'services' key"
+    assert len(kb["services"]) == 6, f"Expected 6 services, got {len(kb['services'])}"
+    print(f"  ✓ Loaded {len(kb['services'])} services")
 
-    print("\n✓ All topic links validated\n")
+    expected_services = [
+        "ai_core", "genai_hub", "ai_launchpad",
+        "joule", "hana_cloud_vector", "document_processing",
+    ]
+    for svc in expected_services:
+        assert svc in kb["services"], f"Missing service: {svc}"
+        svc_data = kb["services"][svc]
+        assert "display_name" in svc_data, f"Missing display_name for {svc}"
+        assert "description" in svc_data, f"Missing description for {svc}"
+        assert "docs" in svc_data, f"Missing docs for {svc}"
+        assert len(svc_data["docs"]) >= 8, f"Expected >=8 docs for {svc}, got {len(svc_data['docs'])}"
+        print(f"  ✓ {svc}: {svc_data['display_name']} ({len(svc_data['docs'])} docs)")
 
-
-def test_prompt_generation():
-    """Test prompt generation for topics."""
-    print("=== Testing Prompt Generation ===\n")
-
-    prompt = get_topics_for_prompt()
-    assert len(prompt) > 0, "Prompt should not be empty"
-
-    for topic in TOPIC_LINKS.keys():
-        assert topic in prompt, f"Topic {topic} missing from prompt"
-
-    print("Generated prompt for LLM:\n")
-    print(prompt)
-    print("\n✓ Prompt generation works\n")
+    print("\n✓ KB loading passed\n")
 
 
-def test_mock_classification():
-    """Test the mock classification without GenAI Hub."""
-    print("=== Testing Mock Classification ===\n")
+def test_id_uniqueness():
+    """Test that all document IDs are unique across all services."""
+    print("=== Testing ID Uniqueness ===\n")
 
-    # Import here to avoid issues if dependencies aren't installed
-    from intent_classifier import IntentClassifier
+    all_ids = get_all_doc_ids()
+    kb = load_knowledge_base()
 
-    classifier = IntentClassifier()
+    total_docs = sum(len(svc["docs"]) for svc in kb["services"].values())
+    assert len(all_ids) == total_docs, f"ID count ({len(all_ids)}) != doc count ({total_docs})"
+    print(f"  ✓ All {len(all_ids)} document IDs are unique")
 
-    # Test cases: (query, expected_topic, expected_is_tm)
+    print("\n✓ ID uniqueness passed\n")
+
+
+def test_search():
+    """Test the search_knowledge_base function with various queries."""
+    print("=== Testing KB Search ===\n")
+
+    # Test 1: Search for AI Core setup
+    results = json.loads(search_knowledge_base("ai core setup deployment"))
+    assert len(results) > 0, "Should find results for 'ai core setup deployment'"
+    assert any(r["service"] == "ai_core" for r in results), "Should find ai_core results"
+    print(f"  ✓ 'ai core setup deployment' → {len(results)} results (top: {results[0]['title']})")
+
+    # Test 2: Search with service filter
+    results = json.loads(search_knowledge_base("overview", service="genai_hub"))
+    assert len(results) > 0, "Should find results for 'overview' in genai_hub"
+    assert all(r["service"] == "genai_hub" for r in results), "All results should be genai_hub"
+    print(f"  ✓ 'overview' (genai_hub only) → {len(results)} results")
+
+    # Test 3: Search for vector/embeddings
+    results = json.loads(search_knowledge_base("vector embeddings similarity search"))
+    assert len(results) > 0, "Should find results for vector search"
+    assert any(r["service"] == "hana_cloud_vector" for r in results), "Should find HANA vector results"
+    print(f"  ✓ 'vector embeddings similarity search' → {len(results)} results")
+
+    # Test 4: Search for RAG/grounding
+    results = json.loads(search_knowledge_base("RAG retrieval augmented generation grounding"))
+    assert len(results) > 0, "Should find results for RAG"
+    print(f"  ✓ 'RAG retrieval augmented generation' → {len(results)} results")
+
+    # Test 5: Search for Joule skills
+    results = json.loads(search_knowledge_base("joule skill creation"))
+    assert len(results) > 0, "Should find Joule results"
+    assert any(r["service"] == "joule" for r in results), "Should find joule results"
+    print(f"  ✓ 'joule skill creation' → {len(results)} results")
+
+    # Test 6: Search for document extraction
+    results = json.loads(search_knowledge_base("invoice extraction schema"))
+    assert len(results) > 0, "Should find DOX results"
+    assert any(r["service"] == "document_processing" for r in results)
+    print(f"  ✓ 'invoice extraction schema' → {len(results)} results")
+
+    # Test 7: Nonsense query should return few/no results
+    results = json.loads(search_knowledge_base("xyzzy foobar blargh"))
+    print(f"  ✓ Nonsense query → {len(results)} results (expected few/none)")
+
+    print("\n✓ KB search passed\n")
+
+
+def test_doc_lookup():
+    """Test looking up documents by their IDs."""
+    print("=== Testing Doc Lookup ===\n")
+
+    docs = get_docs_by_ids(["aicore_overview_01", "genai_sdk_03", "joule_studio_01"])
+    assert len(docs) == 3, f"Expected 3 docs, got {len(docs)}"
+    titles = [d["title"] for d in docs]
+    assert "What Is SAP AI Core?" in titles
+    assert "SAP Cloud SDK for AI (Python)" in titles
+    print(f"  ✓ Looked up 3 docs by ID: {', '.join(titles)}")
+
+    # Non-existent ID should be skipped
+    docs = get_docs_by_ids(["aicore_overview_01", "nonexistent_999"])
+    assert len(docs) == 1, "Should only return existing docs"
+    print(f"  ✓ Non-existent ID correctly skipped")
+
+    print("\n✓ Doc lookup passed\n")
+
+
+def test_services_summary():
+    """Test the services summary generation for the system prompt."""
+    print("=== Testing Services Summary ===\n")
+
+    summary = get_services_summary()
+    assert len(summary) > 0, "Summary should not be empty"
+    assert "ai_core" in summary
+    assert "genai_hub" in summary
+    assert "joule" in summary
+    assert "hana_cloud_vector" in summary
+    print("Generated services summary:\n")
+    print(summary)
+
+    print("\n✓ Services summary passed\n")
+
+
+def test_kb_management():
+    """Test KB CRUD operations (add, update, delete) without persisting to disk."""
+    print("=== Testing KB Management ===\n")
+
+    # Save original KB state for restoration
+    kb_original = copy.deepcopy(load_knowledge_base())
+
+    try:
+        # Test add
+        new_id = add_entry("ai_core", {
+            "title": "Test Entry",
+            "url": "https://example.com/test",
+            "description": "A test documentation entry",
+            "tags": ["test"],
+        })
+        assert new_id is not None, "add_entry should return an ID"
+        assert new_id in get_all_doc_ids(), "New entry should be in all IDs"
+        print(f"  ✓ Added entry: {new_id}")
+
+        # Test add to nonexistent service
+        result = add_entry("nonexistent_service", {
+            "title": "Bad", "url": "x", "description": "x"
+        })
+        assert result is None, "Should return None for nonexistent service"
+        print(f"  ✓ Add to nonexistent service correctly returns None")
+
+        # Test update
+        success = update_entry(new_id, {"title": "Updated Test Entry"})
+        assert success, "update_entry should return True"
+        docs = get_docs_by_ids([new_id])
+        assert docs[0]["title"] == "Updated Test Entry", "Title should be updated"
+        print(f"  ✓ Updated entry title to 'Updated Test Entry'")
+
+        # Test update nonexistent
+        success = update_entry("nonexistent_id", {"title": "X"})
+        assert not success, "Should return False for nonexistent ID"
+        print(f"  ✓ Update nonexistent entry correctly returns False")
+
+        # Test delete
+        success = delete_entry(new_id)
+        assert success, "delete_entry should return True"
+        assert new_id not in get_all_doc_ids(), "Deleted entry should be gone"
+        print(f"  ✓ Deleted entry: {new_id}")
+
+        # Test delete nonexistent
+        success = delete_entry("nonexistent_id")
+        assert not success, "Should return False for nonexistent ID"
+        print(f"  ✓ Delete nonexistent entry correctly returns False")
+
+    finally:
+        # Restore original KB
+        save_knowledge_base(kb_original)
+        _invalidate_cache()
+
+    print("\n✓ KB management passed\n")
+
+
+def test_available_services():
+    """Test the available services listing."""
+    print("=== Testing Available Services ===\n")
+
+    services = get_available_services()
+    assert len(services) == 6, f"Expected 6 services, got {len(services)}"
+
+    for svc in services:
+        assert "key" in svc
+        assert "display_name" in svc
+        assert "description" in svc
+        assert "doc_count" in svc
+        assert svc["doc_count"] >= 8
+        print(f"  ✓ {svc['key']}: {svc['display_name']} ({svc['doc_count']} docs)")
+
+    print("\n✓ Available services passed\n")
+
+
+def test_get_all_entries():
+    """Test listing all entries with optional service filter."""
+    print("=== Testing Get All Entries ===\n")
+
+    all_entries = get_all_entries()
+    assert len(all_entries) == 60, f"Expected 60 total entries, got {len(all_entries)}"
+    print(f"  ✓ Total entries: {len(all_entries)}")
+
+    ai_core_entries = get_all_entries(service_filter="ai_core")
+    assert len(ai_core_entries) == 10, f"Expected 10 ai_core entries, got {len(ai_core_entries)}"
+    assert all(e["service_key"] == "ai_core" for e in ai_core_entries)
+    print(f"  ✓ ai_core entries: {len(ai_core_entries)}")
+
+    print("\n✓ Get all entries passed\n")
+
+
+def test_mock_assistant():
+    """Test the mock documentation assistant with various questions."""
+    print("=== Testing Mock Assistant ===\n")
+
+    from doc_assistant import DocAssistant
+
+    assistant = DocAssistant()
+
+    # Test cases: (question, expected_is_sap_ai, expected_services_contain)
     test_cases = [
-        ("How do I submit my annual performance review?", "performance_management", True),
-        ("I need to request time off for next week", "time_attendance", True),
-        ("Where can I find training courses?", "learning_development", True),
-        ("How do I post a job opening?", "recruitment", True),
-        ("What is my current salary?", "compensation_benefits", True),
-        ("Who is next in line for the VP role?", "succession_planning", True),
-        ("New hire onboarding checklist", "employee_onboarding", True),
-        ("Update my profile picture", "employee_central", True),
-        ("What is the weather today?", None, False),
-        ("How do I reset my laptop password?", None, False),
+        ("How do I set up AI Core?", True, ["ai_core"]),
+        ("What SDK should I use for orchestration?", True, ["genai_hub"]),
+        ("How do I create a Joule skill?", True, ["joule"]),
+        ("How does RAG work in SAP?", True, ["genai_hub"]),
+        ("How do I store vector embeddings in HANA?", True, ["hana_cloud_vector"]),
+        ("How do I extract data from invoices?", True, ["document_processing"]),
+        ("How do I deploy a model?", True, ["ai_core"]),
+        ("What's the weather today?", False, []),
+        ("How do I reset my laptop password?", False, []),
     ]
 
     passed = 0
     failed = 0
 
-    for query, expected_topic, expected_is_tm in test_cases:
-        result = classifier.classify(query)
+    for question, expected_is_sap, expected_services in test_cases:
+        result = assistant.ask(question)
 
-        is_tm_match = result["is_talent_management"] == expected_is_tm
-        topic_match = result["topic"] == expected_topic
+        is_sap_match = result["is_sap_ai"] == expected_is_sap
+        services_match = (
+            not expected_services
+            or all(s in result["services"] for s in expected_services)
+        )
 
-        if is_tm_match and (not expected_is_tm or topic_match):
-            print(f"  ✓ '{query[:40]}...'")
-            print(f"    → {result['topic_display_name'] or 'Not TM'} (confidence: {result['confidence']})")
+        if is_sap_match and services_match:
+            svc_str = ", ".join(result["services"]) if result["services"] else "N/A"
+            link_count = len(result["links"])
+            print(f"  ✓ '{question[:45]}...'")
+            print(f"    → services=[{svc_str}], links={link_count}, confidence={result['confidence']}")
             passed += 1
         else:
-            print(f"  ✗ '{query[:40]}...'")
-            print(f"    Expected: {expected_topic}, Got: {result['topic']}")
+            print(f"  ✗ '{question[:45]}...'")
+            print(f"    Expected: is_sap_ai={expected_is_sap}, services⊇{expected_services}")
+            print(f"    Got:      is_sap_ai={result['is_sap_ai']}, services={result['services']}")
             failed += 1
 
     print(f"\n{'✓' if failed == 0 else '✗'} {passed}/{len(test_cases)} tests passed\n")
     return failed == 0
 
 
+def test_pipeline_visibility():
+    """Test that pipeline details include tool call information."""
+    print("=== Testing Pipeline Visibility ===\n")
+
+    from doc_assistant import DocAssistant
+
+    assistant = DocAssistant()
+    result = assistant.ask("How do I deploy models on AI Core?", include_pipeline=True)
+
+    assert "pipeline" in result, "Pipeline should be in result when include_pipeline=True"
+    pipeline = result["pipeline"]
+
+    assert "content_filtering" in pipeline, "Pipeline should have content_filtering"
+    assert "llm" in pipeline, "Pipeline should have llm details"
+    assert "messages_to_llm" in pipeline, "Pipeline should have messages_to_llm"
+    assert "tool_calls" in pipeline, "Pipeline should have tool_calls"
+
+    print(f"  ✓ Pipeline has all expected fields")
+
+    # Check tool call details
+    tool_calls = pipeline["tool_calls"]
+    assert tool_calls is not None, "Tool calls should not be None in mock mode"
+    assert len(tool_calls) > 0, "Should have at least one tool call"
+
+    tc = tool_calls[0]
+    assert "tool_name" in tc, "Tool call should have tool_name"
+    assert "arguments" in tc, "Tool call should have arguments"
+    assert "result_count" in tc, "Tool call should have result_count"
+    assert "results_preview" in tc, "Tool call should have results_preview"
+    print(f"  ✓ Tool call: {tc['tool_name']}({tc['arguments']}) → {tc['result_count']} results")
+
+    print("\n✓ Pipeline visibility passed\n")
+
+
+def test_empty_query():
+    """Test handling of empty/whitespace queries."""
+    print("=== Testing Empty Query ===\n")
+
+    from doc_assistant import DocAssistant
+
+    assistant = DocAssistant()
+
+    result = assistant.ask("")
+    assert result["is_sap_ai"] is False
+    assert "valid question" in result["answer"].lower()
+    print(f"  ✓ Empty query handled correctly")
+
+    result = assistant.ask("   ")
+    assert result["is_sap_ai"] is False
+    print(f"  ✓ Whitespace query handled correctly")
+
+    print("\n✓ Empty query passed\n")
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("Talent Management Intent Classifier - Local Tests")
+    print("SAP AI Documentation Assistant - Local Tests")
     print("=" * 60 + "\n")
 
-    test_topic_links()
-    test_prompt_generation()
-    success = test_mock_classification()
+    test_kb_loading()
+    test_id_uniqueness()
+    test_search()
+    test_doc_lookup()
+    test_services_summary()
+    test_kb_management()
+    test_available_services()
+    test_get_all_entries()
+    success = test_mock_assistant()
+    test_pipeline_visibility()
+    test_empty_query()
 
     print("=" * 60)
     print("TEST SUMMARY: " + ("ALL PASSED ✓" if success else "SOME FAILED ✗"))

@@ -1,0 +1,760 @@
+{
+  "services": {
+    "ai_core": {
+      "display_name": "SAP AI Core",
+      "description": "Runtime for AI model training, deployment, and inference on SAP BTP",
+      "docs": [
+        {
+          "id": "aicore_overview_01",
+          "title": "What Is SAP AI Core?",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/what-is-sap-ai-core",
+          "description": "Main overview of SAP AI Core as an engine for running AI workflows and model serving workloads",
+          "tags": [
+            "overview",
+            "getting started",
+            "introduction"
+          ]
+        },
+        {
+          "id": "aicore_setup_02",
+          "title": "Initial Setup",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/initial-setup",
+          "description": "Step-by-step guide for provisioning and configuring SAP AI Core on BTP",
+          "tags": [
+            "setup",
+            "provisioning",
+            "configuration",
+            "getting started"
+          ]
+        },
+        {
+          "id": "aicore_resource_groups_03",
+          "title": "Resource Groups",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/resource-groups",
+          "description": "Resource group isolation based on Kubernetes namespaces for multi-tenant AI workloads",
+          "tags": [
+            "resource groups",
+            "isolation",
+            "multi-tenant",
+            "kubernetes"
+          ]
+        },
+        {
+          "id": "aicore_manage_rg_04",
+          "title": "Manage Resource Groups",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/manage-resource-groups",
+          "description": "How to create and manage resource groups for tenant isolation",
+          "tags": [
+            "resource groups",
+            "management",
+            "tenant"
+          ]
+        },
+        {
+          "id": "aicore_docker_05",
+          "title": "Register Your Docker Registry Secret",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/register-your-docker-registry-secret",
+          "description": "Registering Docker registry credentials for custom model containers",
+          "tags": [
+            "docker",
+            "registry",
+            "containers",
+            "secrets"
+          ]
+        },
+        {
+          "id": "aicore_serving_06",
+          "title": "Serving Templates",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/serving-templates",
+          "description": "Defining deployment templates using KServe notation for model serving",
+          "tags": [
+            "serving",
+            "templates",
+            "kserve",
+            "deployment",
+            "inference"
+          ]
+        },
+        {
+          "id": "aicore_workflow_07",
+          "title": "Workflow Templates",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/workflow-templates",
+          "description": "Creating Argo workflow templates for training pipelines and executions",
+          "tags": [
+            "workflow",
+            "training",
+            "argo",
+            "pipeline",
+            "execution"
+          ]
+        },
+        {
+          "id": "aicore_deploy_08",
+          "title": "Deploy Models",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/deploy-models",
+          "description": "Guide to deploying AI models as inference endpoints on SAP AI Core",
+          "tags": [
+            "deploy",
+            "models",
+            "inference",
+            "endpoints"
+          ]
+        },
+        {
+          "id": "aicore_genai_deploy_09",
+          "title": "Create a Deployment for a Generative AI Model",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/create-deployment-for-generative-ai-model-in-sap-ai-core",
+          "description": "Deploying generative AI foundation models (GPT, Claude, Gemini, etc.) on AI Core",
+          "tags": [
+            "deploy",
+            "generative ai",
+            "foundation models",
+            "gpt",
+            "claude",
+            "gemini"
+          ]
+        },
+        {
+          "id": "aicore_api_10",
+          "title": "AI API Overview",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/about-ai-api",
+          "description": "The AI API standard for managing AI scenario lifecycles across runtimes",
+          "tags": [
+            "api",
+            "ai api",
+            "scenarios",
+            "lifecycle"
+          ]
+        }
+      ]
+    },
+    "genai_hub": {
+      "display_name": "Generative AI Hub",
+      "description": "Orchestration SDK for prompt engineering, content filtering, grounding, and RAG with foundation models",
+      "docs": [
+        {
+          "id": "genai_overview_01",
+          "title": "Generative AI Hub in SAP AI Core Overview",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/generative-ai-hub-in-sap-ai-core",
+          "description": "Main overview of GenAI Hub capabilities within SAP AI Core",
+          "tags": [
+            "overview",
+            "getting started",
+            "generative ai"
+          ]
+        },
+        {
+          "id": "genai_models_02",
+          "title": "Models and Scenarios in the Generative AI Hub",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/models-and-scenarios-in-generative-ai-hub",
+          "description": "Available foundation models (OpenAI, Anthropic, Google, Meta) and scenario configurations",
+          "tags": [
+            "models",
+            "scenarios",
+            "openai",
+            "anthropic",
+            "google",
+            "meta",
+            "foundation models"
+          ]
+        },
+        {
+          "id": "genai_sdk_03",
+          "title": "SAP Cloud SDK for AI (Python)",
+          "url": "https://help.sap.com/doc/generative-ai-hub-sdk/CLOUD/en-US/index.html",
+          "description": "Primary documentation for the GenAI Hub Python SDK",
+          "tags": [
+            "sdk",
+            "python",
+            "getting started",
+            "installation"
+          ]
+        },
+        {
+          "id": "genai_orchestration_04",
+          "title": "Orchestration Service (SDK Reference)",
+          "url": "https://help.sap.com/doc/generative-ai-hub-sdk/CLOUD/en-US/_reference/orchestration-service.html",
+          "description": "SDK reference for orchestration: templating, LLMs, data masking, content filtering",
+          "tags": [
+            "orchestration",
+            "sdk",
+            "templating",
+            "data masking",
+            "content filtering"
+          ]
+        },
+        {
+          "id": "genai_orchestration_guide_05",
+          "title": "Orchestration (Service Guide)",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/orchestration",
+          "description": "Orchestration service concepts for composing AI-driven workflows with modules",
+          "tags": [
+            "orchestration",
+            "workflow",
+            "modules",
+            "concepts"
+          ]
+        },
+        {
+          "id": "genai_grounding_06",
+          "title": "Document Grounding (SDK Reference)",
+          "url": "https://help.sap.com/doc/generative-ai-hub-sdk/CLOUD/en-US/_reference/document-grounding.html",
+          "description": "RAG (Retrieval Augmented Generation) via the grounding module in orchestration",
+          "tags": [
+            "grounding",
+            "rag",
+            "retrieval",
+            "documents",
+            "sdk"
+          ]
+        },
+        {
+          "id": "genai_grounding_guide_07",
+          "title": "Grounding (Service Guide)",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/grounding",
+          "description": "Configuring grounding module with search parameters and document filters",
+          "tags": [
+            "grounding",
+            "rag",
+            "search",
+            "filters",
+            "configuration"
+          ]
+        },
+        {
+          "id": "genai_prompt_registry_08",
+          "title": "Prompt Registry",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/prompt-registry",
+          "description": "Managing and versioning prompt templates for use with GenAI Hub models",
+          "tags": [
+            "prompts",
+            "registry",
+            "templates",
+            "versioning"
+          ]
+        },
+        {
+          "id": "genai_prompt_sdk_09",
+          "title": "Prompt Registry (SDK Reference)",
+          "url": "https://help.sap.com/doc/generative-ai-hub-sdk/CLOUD/en-US/_reference/prompt-registry.html",
+          "description": "Python SDK reference for creating and retrieving prompt templates",
+          "tags": [
+            "prompts",
+            "sdk",
+            "python",
+            "templates"
+          ]
+        },
+        {
+          "id": "genai_deploy_orch_10",
+          "title": "Create a Deployment for Orchestration",
+          "url": "https://help.sap.com/docs/sap-ai-core/sap-ai-core-service-guide/create-deployment-for-orchestration",
+          "description": "Setting up a deployment of the orchestration service for AI workflows",
+          "tags": [
+            "deploy",
+            "orchestration",
+            "setup",
+            "configuration"
+          ]
+        }
+      ]
+    },
+    "ai_launchpad": {
+      "display_name": "SAP AI Launchpad",
+      "description": "Web UI for managing AI scenarios, models, deployments, and MLOps workflows",
+      "docs": [
+        {
+          "id": "launchpad_overview_01",
+          "title": "What Is SAP AI Launchpad?",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/what-is-sap-ai-launchpad",
+          "description": "Overview of SAP AI Launchpad for managing AI use cases across runtimes",
+          "tags": [
+            "overview",
+            "getting started",
+            "introduction"
+          ]
+        },
+        {
+          "id": "launchpad_using_02",
+          "title": "Using SAP AI Launchpad",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/using-sap-ai-launchpad",
+          "description": "Guide to the UI for AI scenario producers and consumers",
+          "tags": [
+            "ui",
+            "guide",
+            "scenarios",
+            "producers",
+            "consumers"
+          ]
+        },
+        {
+          "id": "launchpad_mlops_03",
+          "title": "ML Operations",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/ml-operations",
+          "description": "MLOps features: training runs, monitoring, model lifecycle management",
+          "tags": [
+            "mlops",
+            "training",
+            "monitoring",
+            "lifecycle",
+            "operations"
+          ]
+        },
+        {
+          "id": "launchpad_genai_04",
+          "title": "Generative AI Hub (AI Launchpad)",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/generative-ai-hub",
+          "description": "Using the Generative AI Hub prompt editor and chat within AI Launchpad",
+          "tags": [
+            "generative ai",
+            "prompt editor",
+            "chat",
+            "playground"
+          ]
+        },
+        {
+          "id": "launchpad_scenarios_05",
+          "title": "Scenarios (Consumer)",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/consumer-scenarios",
+          "description": "Managing AI scenarios as a consumer (business analyst role)",
+          "tags": [
+            "scenarios",
+            "consumer",
+            "business analyst"
+          ]
+        },
+        {
+          "id": "launchpad_models_06",
+          "title": "Models and Scenarios in the Generative AI Hub",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad-user-guide/models-and-scenarios-in-generative-ai-hub-fef463b24bff4f44a33e98bb1e4f3148",
+          "description": "Available models and scenario management in the Generative AI Hub UI",
+          "tags": [
+            "models",
+            "scenarios",
+            "generative ai",
+            "management"
+          ]
+        },
+        {
+          "id": "launchpad_activate_07",
+          "title": "Activate Generative AI Hub",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad-user-guide/activate-generative-ai-hub-for-sap-ai-launchpad",
+          "description": "Activating and configuring the Generative AI Hub for AI Launchpad",
+          "tags": [
+            "activate",
+            "setup",
+            "generative ai",
+            "configuration"
+          ]
+        },
+        {
+          "id": "launchpad_subscribe_08",
+          "title": "Subscribe to SAP AI Launchpad",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/subscribe-to-sap-ai-launchpad",
+          "description": "Subscription and provisioning steps for AI Launchpad on BTP",
+          "tags": [
+            "subscribe",
+            "provisioning",
+            "setup",
+            "btp"
+          ]
+        },
+        {
+          "id": "launchpad_plans_09",
+          "title": "Service Plans",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/service-plans",
+          "description": "Available service plan tiers for SAP AI Launchpad",
+          "tags": [
+            "service plans",
+            "pricing",
+            "tiers"
+          ]
+        },
+        {
+          "id": "launchpad_whatsnew_10",
+          "title": "What's New for SAP AI Launchpad",
+          "url": "https://help.sap.com/docs/ai-launchpad/sap-ai-launchpad/whats-new-for-sap-ai-launchpad",
+          "description": "Release notes and latest feature updates for AI Launchpad",
+          "tags": [
+            "release notes",
+            "updates",
+            "new features"
+          ]
+        }
+      ]
+    },
+    "joule": {
+      "display_name": "SAP Joule",
+      "description": "AI copilot for SAP applications with custom skill creation via Joule Studio",
+      "docs": [
+        {
+          "id": "joule_studio_01",
+          "title": "What is Joule Studio?",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/4444cd1ce4cd471bbe127ea2e4735b40.html",
+          "description": "Overview of Joule Studio for building and managing Joule skills",
+          "tags": [
+            "joule studio",
+            "overview",
+            "skills",
+            "getting started"
+          ]
+        },
+        {
+          "id": "joule_setup_02",
+          "title": "Set Up Joule Studio",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/04b323352fa645238211ce017f634d34.html",
+          "description": "Setup and configuration guide for Joule Studio environment",
+          "tags": [
+            "setup",
+            "configuration",
+            "joule studio"
+          ]
+        },
+        {
+          "id": "joule_skills_03",
+          "title": "Manage Joule Skills",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/ac5fd329d67844ae96697dec1bd77d22.html",
+          "description": "Creating and managing skills within Joule Studio",
+          "tags": [
+            "skills",
+            "manage",
+            "create",
+            "joule studio"
+          ]
+        },
+        {
+          "id": "joule_action_04",
+          "title": "Create an Action Project",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/45fe56700ef743fdbd7c595befe9a78f.html",
+          "description": "Building action projects that connect skills to backend APIs",
+          "tags": [
+            "actions",
+            "project",
+            "api",
+            "backend"
+          ]
+        },
+        {
+          "id": "joule_custom_action_05",
+          "title": "Add a Custom Action",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/3e517647eb454f6ebb33130bd141c6fa.html",
+          "description": "Adding custom actions to connect Joule skills to external services",
+          "tags": [
+            "custom action",
+            "external services",
+            "integration"
+          ]
+        },
+        {
+          "id": "joule_test_06",
+          "title": "Test a Joule Skill",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/c4a47fa267ed442db7a822adc3da27f1.html",
+          "description": "Testing and validating skills before deployment",
+          "tags": [
+            "testing",
+            "validation",
+            "skills"
+          ]
+        },
+        {
+          "id": "joule_build_07",
+          "title": "Integration with SAP Build",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/259112f367c84f6faa83e52a627188c3.html",
+          "description": "Integrating Joule Studio skills with SAP Build Actions",
+          "tags": [
+            "sap build",
+            "integration",
+            "actions"
+          ]
+        },
+        {
+          "id": "joule_enable_08",
+          "title": "Enabling Joule",
+          "url": "https://help.sap.com/docs/btp/sap-business-technology-platform/enabling-joule",
+          "description": "Enabling Joule across SAP BTP subaccounts",
+          "tags": [
+            "enable",
+            "btp",
+            "setup",
+            "subaccount"
+          ]
+        },
+        {
+          "id": "joule_capabilities_09",
+          "title": "Joule Capabilities",
+          "url": "https://help.sap.com/docs/JOULE/82a14f108cfa4d4788244d81371e072b/41de8c499c72413c8e134493686a5348.html",
+          "description": "Transactional, navigational, and informational capability types for Joule",
+          "tags": [
+            "capabilities",
+            "transactional",
+            "navigational",
+            "informational"
+          ]
+        },
+        {
+          "id": "joule_import_10",
+          "title": "Import a Project",
+          "url": "https://help.sap.com/docs/Joule_Studio/45f9d2b8914b4f0ba731570ff9a85313/bea71700807c4f8ebc0608bcf7268bba.html",
+          "description": "Importing existing skill projects into Joule Studio",
+          "tags": [
+            "import",
+            "project",
+            "joule studio"
+          ]
+        }
+      ]
+    },
+    "hana_cloud_vector": {
+      "display_name": "SAP HANA Cloud Vector Engine",
+      "description": "Native vector storage and similarity search engine built into SAP HANA Cloud for RAG and AI applications",
+      "docs": [
+        {
+          "id": "hana_vector_guide_01",
+          "title": "SAP HANA Cloud Vector Engine Guide",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/sap-hana-cloud-sap-hana-database-vector-engine-guide",
+          "description": "Main landing page for the complete Vector Engine documentation",
+          "tags": [
+            "overview",
+            "guide",
+            "getting started"
+          ]
+        },
+        {
+          "id": "hana_vector_intro_02",
+          "title": "Introduction to Vector Engine",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/introduction",
+          "description": "What the HANA Cloud vector engine is and its core capabilities",
+          "tags": [
+            "introduction",
+            "overview",
+            "capabilities"
+          ]
+        },
+        {
+          "id": "hana_vector_embeddings_03",
+          "title": "Vectors, Vector Embeddings, and Similarity Measures",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/vectors-vector-embeddings-and-similarity-measures",
+          "description": "Conceptual overview of vectors, embeddings, and distance/similarity metrics",
+          "tags": [
+            "vectors",
+            "embeddings",
+            "similarity",
+            "distance",
+            "concepts"
+          ]
+        },
+        {
+          "id": "hana_vector_datatype_04",
+          "title": "REAL_VECTOR Data Type",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/real-vector-data-type",
+          "description": "The native REAL_VECTOR data type for storing vector embeddings in HANA",
+          "tags": [
+            "real_vector",
+            "data type",
+            "storage",
+            "embeddings"
+          ]
+        },
+        {
+          "id": "hana_vector_tables_05",
+          "title": "Creating Tables with REAL_VECTOR Columns",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/creating-tables-with-real-vector-columns",
+          "description": "DDL for creating tables with vector columns for embedding storage",
+          "tags": [
+            "tables",
+            "ddl",
+            "columns",
+            "storage",
+            "create"
+          ]
+        },
+        {
+          "id": "hana_vector_cosine_06",
+          "title": "COSINE_SIMILARITY Function",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/cosine-similarity-function-vector",
+          "description": "SQL function for computing cosine similarity between vectors",
+          "tags": [
+            "cosine similarity",
+            "sql",
+            "function",
+            "search"
+          ]
+        },
+        {
+          "id": "hana_vector_l2_07",
+          "title": "L2DISTANCE Function",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/l2distance-function-vector",
+          "description": "Euclidean distance function for nearest-neighbor vector search",
+          "tags": [
+            "l2 distance",
+            "euclidean",
+            "sql",
+            "function",
+            "nearest neighbor"
+          ]
+        },
+        {
+          "id": "hana_vector_auto_embed_08",
+          "title": "Creating Vector Embeddings Automatically",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/creating-vector-embeddings-automatically",
+          "description": "Automatic embedding generation from text using integrated models",
+          "tags": [
+            "embeddings",
+            "automatic",
+            "generation",
+            "text"
+          ]
+        },
+        {
+          "id": "hana_vector_index_09",
+          "title": "Creating Indexes on REAL_VECTOR Columns",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/creating-indexes-on-real-vector-columns",
+          "description": "HNSW and other index types for accelerating similarity searches",
+          "tags": [
+            "index",
+            "hnsw",
+            "performance",
+            "search",
+            "acceleration"
+          ]
+        },
+        {
+          "id": "hana_vector_create_idx_10",
+          "title": "CREATE VECTOR INDEX Statement",
+          "url": "https://help.sap.com/docs/hana-cloud-database/sap-hana-cloud-sap-hana-database-vector-engine-guide/create-vector-index-statement-data-definition",
+          "description": "SQL DDL reference for creating vector indexes for fast similarity search",
+          "tags": [
+            "create index",
+            "ddl",
+            "sql",
+            "vector index"
+          ]
+        }
+      ]
+    },
+    "document_processing": {
+      "display_name": "SAP Document Information Extraction",
+      "description": "AI-powered document extraction service for invoices, purchase orders, and custom documents",
+      "docs": [
+        {
+          "id": "dox_main_01",
+          "title": "Document Information Extraction",
+          "url": "https://help.sap.com/docs/document-information-extraction",
+          "description": "Main landing page for all Document Information Extraction documentation",
+          "tags": [
+            "overview",
+            "getting started",
+            "landing page"
+          ]
+        },
+        {
+          "id": "dox_overview_02",
+          "title": "What Is Document Information Extraction?",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/what-is-document-information-extraction",
+          "description": "Overview of automated document data extraction using AI",
+          "tags": [
+            "overview",
+            "introduction",
+            "extraction"
+          ]
+        },
+        {
+          "id": "dox_setup_03",
+          "title": "Initial Setup",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/initial-setup",
+          "description": "Provisioning service instance and initial configuration for DOX",
+          "tags": [
+            "setup",
+            "provisioning",
+            "configuration"
+          ]
+        },
+        {
+          "id": "dox_doc_types_04",
+          "title": "Supported Document Types",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/supported-document-types",
+          "description": "List of supported document types: invoices, purchase orders, payment advices, and more",
+          "tags": [
+            "document types",
+            "invoices",
+            "purchase orders",
+            "supported"
+          ]
+        },
+        {
+          "id": "dox_schema_05",
+          "title": "Create Schema",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/create-schema",
+          "description": "Defining custom schemas for document field extraction",
+          "tags": [
+            "schema",
+            "custom",
+            "fields",
+            "extraction"
+          ]
+        },
+        {
+          "id": "dox_schema_api_06",
+          "title": "Schema API",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/schema-api",
+          "description": "API reference for managing extraction schemas programmatically",
+          "tags": [
+            "api",
+            "schema",
+            "programmatic",
+            "reference"
+          ]
+        },
+        {
+          "id": "dox_document_api_07",
+          "title": "Document API",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/document-api",
+          "description": "API reference for submitting documents and retrieving extraction results",
+          "tags": [
+            "api",
+            "document",
+            "submit",
+            "extraction",
+            "results"
+          ]
+        },
+        {
+          "id": "dox_results_08",
+          "title": "View and Edit Extraction Results",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/view-and-edit-extraction-results",
+          "description": "Using the UI application to review and correct extracted data",
+          "tags": [
+            "results",
+            "review",
+            "edit",
+            "ui"
+          ]
+        },
+        {
+          "id": "dox_setup_types_09",
+          "title": "Setup Types",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/setup-types",
+          "description": "Standard vs. custom setup types for different extraction scenarios",
+          "tags": [
+            "setup types",
+            "standard",
+            "custom",
+            "configuration"
+          ]
+        },
+        {
+          "id": "dox_genai_10",
+          "title": "Extraction Using Generative AI",
+          "url": "https://help.sap.com/docs/document-information-extraction/document-information-extraction/extraction-using-generative-ai",
+          "description": "Best practices for leveraging generative AI in document extraction",
+          "tags": [
+            "generative ai",
+            "extraction",
+            "best practices",
+            "ai"
+          ]
+        }
+      ]
+    }
+  }
+}
