@@ -368,6 +368,29 @@ Instructions:
             "answer": answer,
         }
 
+    @staticmethod
+    def _deduplicate_trailing_messages(messages: list[dict]) -> list[dict]:
+        """Remove trailing messages that duplicate earlier ones in the list.
+
+        The orchestration SDK re-renders the prompt template on the second LLM call,
+        appending system+user messages that already exist in the history. This strips
+        those trailing duplicates so the pipeline display is clean.
+        """
+        if len(messages) < 3:
+            return messages
+
+        # Find how many trailing messages match the start of the list
+        trim = 0
+        for i in range(1, len(messages) // 2 + 1):
+            tail = messages[-i:]
+            head = messages[:i]
+            if all(
+                t["role"] == h["role"] and t["content"] == h["content"]
+                for t, h in zip(tail, head)
+            ):
+                trim = i
+        return messages[:-trim] if trim else messages
+
     def _extract_pipeline_details(self, original_query: str, result) -> dict:
         """Extract pipeline processing details from orchestration result."""
         mr = result.intermediate_results
@@ -401,6 +424,10 @@ Instructions:
         if not messages_to_llm and mr.templating:
             for msg in mr.templating:
                 messages_to_llm.append({"role": msg.role, "content": msg.content})
+
+        # Strip trailing duplicate messages caused by SDK re-rendering the template
+        # on the second LLM call (history already contains system+user from first call)
+        messages_to_llm = self._deduplicate_trailing_messages(messages_to_llm)
 
         # Extract content filtering scores (V2 uses lowercase keys)
         input_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True}
