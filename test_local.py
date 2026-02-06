@@ -344,6 +344,100 @@ def test_empty_query():
     print("\n✓ Empty query passed\n")
 
 
+def test_content_filtered_pipeline():
+    """Test that content-filtered requests return pipeline details instead of crashing."""
+    print("=== Testing Content Filtered Pipeline ===\n")
+
+    from doc_assistant import DocAssistant
+    from models import LLMDetails
+
+    assistant = DocAssistant()
+
+    # Test 1: _content_filtered_response returns correct structure
+    response = assistant._content_filtered_response("test question", "blocked by filter")
+    assert response["is_sap_ai"] is False
+    assert response["confidence"] == 0.0
+    assert response["services"] == []
+    assert response["links"] == []
+    assert "blocked" in response["answer"].lower()
+    print("  ✓ _content_filtered_response returns correct structure")
+
+    # Test 2: _fallback_error_pipeline returns valid pipeline with blocked_by/reason
+    error = Exception("Content was blocked by input filtering")
+    pipeline = assistant._fallback_error_pipeline("inflammatory query", error)
+    assert pipeline["data_masking"] is None
+    assert pipeline["content_filtering"]["input"]["passed"] is False
+    assert pipeline["content_filtering"]["output"]["passed"] is False
+    assert pipeline["llm"]["model"] == "blocked"
+    assert pipeline["llm"]["blocked_by"] == "unknown"
+    assert "blocked by input filtering" in pipeline["llm"]["reason"]
+    assert pipeline["messages_to_llm"][0]["content"] == "inflammatory query"
+    assert pipeline["tool_calls"] is None
+    print("  ✓ _fallback_error_pipeline returns valid pipeline with blocked_by/reason")
+
+    # Test 3: _extract_pipeline_from_error handles None intermediate_results
+    class FakeError(Exception):
+        pass
+    fake_err = FakeError("filter blocked")
+    # No intermediate_results attribute — should not crash thanks to getattr fallback
+    pipeline = assistant._extract_pipeline_from_error("test query", fake_err)
+    assert pipeline["llm"]["model"] == "blocked"
+    assert pipeline["content_filtering"]["input"]["passed"] is False
+    print("  ✓ _extract_pipeline_from_error handles missing intermediate_results")
+
+    # Test 6: _extract_pipeline_from_error extracts REAL scores from dict-based
+    # intermediate_results (as the V2 SDK actually provides them)
+    class FakeOrchError(Exception):
+        pass
+    dict_err = FakeOrchError("Content filtered")
+    dict_err.location = "input_filtering"
+    dict_err.message = "Content was blocked due to hate speech"
+    dict_err.intermediate_results = {
+        "input_filtering": {
+            "message": "Content filter failed.",
+            "data": {
+                "azure_content_safety": {
+                    "hate": 6,
+                    "self_harm": 0,
+                    "sexual": 0,
+                    "violence": 2,
+                }
+            },
+        },
+        "templating": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "some inflammatory query"},
+        ],
+    }
+    pipeline = assistant._extract_pipeline_from_error("some inflammatory query", dict_err)
+    scores = pipeline["content_filtering"]["input"]
+    assert scores["hate"] == 6, f"Expected hate=6, got {scores['hate']}"
+    assert scores["violence"] == 2, f"Expected violence=2, got {scores['violence']}"
+    assert scores["self_harm"] == 0
+    assert scores["sexual"] == 0
+    assert scores["passed"] is False
+    assert pipeline["llm"]["blocked_by"] == "input_filtering"
+    assert "hate speech" in pipeline["llm"]["reason"]
+    assert len(pipeline["messages_to_llm"]) == 2
+    assert pipeline["messages_to_llm"][1]["content"] == "some inflammatory query"
+    print("  ✓ _extract_pipeline_from_error extracts real Azure scores from dict intermediate_results")
+
+    # Test 4: LLMDetails Pydantic model accepts new blocked_by/reason fields
+    llm = LLMDetails(model="blocked", prompt_tokens=0, completion_tokens=0,
+                     blocked_by="input_filtering", reason="Hate content detected")
+    assert llm.blocked_by == "input_filtering"
+    assert llm.reason == "Hate content detected"
+    print("  ✓ LLMDetails accepts blocked_by and reason fields")
+
+    # Test 5: LLMDetails still works without blocked_by/reason (backwards compat)
+    llm_normal = LLMDetails(model="gpt-4o", prompt_tokens=100, completion_tokens=50)
+    assert llm_normal.blocked_by is None
+    assert llm_normal.reason is None
+    print("  ✓ LLMDetails backwards compatible (None defaults)")
+
+    print("\n✓ Content filtered pipeline passed\n")
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("SAP AI Documentation Assistant - Local Tests")
@@ -360,6 +454,7 @@ if __name__ == "__main__":
     success = test_mock_assistant()
     test_pipeline_visibility()
     test_empty_query()
+    test_content_filtered_pipeline()
 
     print("=" * 60)
     print("TEST SUMMARY: " + ("ALL PASSED ✓" if success else "SOME FAILED ✗"))

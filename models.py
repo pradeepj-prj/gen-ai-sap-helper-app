@@ -61,6 +61,8 @@ class LLMDetails(BaseModel):
     model: str = Field(..., description="Model used for processing")
     prompt_tokens: int = Field(0, description="Tokens in the prompt")
     completion_tokens: int = Field(0, description="Tokens in the response")
+    blocked_by: str | None = Field(None, description="Pipeline module that blocked the request")
+    reason: str | None = Field(None, description="Reason the request was blocked")
 
 
 class LLMMessage(BaseModel):

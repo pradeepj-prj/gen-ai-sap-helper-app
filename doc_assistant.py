@@ -251,7 +251,11 @@ Instructions:
             logger.warning(f"Orchestration blocked: {e}")
             response = self._content_filtered_response(question, str(e))
             if include_pipeline:
-                response["pipeline"] = self._extract_pipeline_from_error(question, e)
+                try:
+                    response["pipeline"] = self._extract_pipeline_from_error(question, e)
+                except Exception as extract_err:
+                    logger.warning(f"Failed to extract pipeline from error: {extract_err}")
+                    response["pipeline"] = self._fallback_error_pipeline(question, e)
             return response
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse LLM response: {e}")
@@ -599,19 +603,48 @@ Instructions:
             "answer": "Your question was blocked by content filtering. Please rephrase your question.",
         }
 
+    def _fallback_error_pipeline(self, original_query: str, error: Exception) -> dict:
+        """Minimal pipeline details when _extract_pipeline_from_error() itself fails.
+
+        Uses only safe primitive attributes from the error to avoid further exceptions.
+        """
+        return {
+            "data_masking": None,
+            "content_filtering": {
+                "input": {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": False},
+                "output": {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": False},
+            },
+            "llm": {
+                "model": "blocked",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "blocked_by": str(getattr(error, "location", "unknown")),
+                "reason": str(error),
+            },
+            "messages_to_llm": [
+                {"role": "user", "content": original_query},
+            ],
+            "tool_calls": None,
+        }
+
     def _extract_pipeline_from_error(self, original_query: str, error: "OrchestrationError") -> dict:
         """Extract pipeline details from an OrchestrationError (e.g., content filter block).
 
-        V2 OrchestrationError exposes intermediate_results as a ModuleResults object
-        (same type as the success response), so we reuse the same extraction logic.
+        V2 SDK passes intermediate_results as a raw dict from the API JSON response
+        (not a ModuleResults Pydantic model), so we must use dict access throughout.
         """
-        mr = getattr(error, "intermediate_results", None)
+        mr = getattr(error, "intermediate_results", None) or {}
+
+        # Normalize: if it's a ModuleResults object, convert to dict
+        if hasattr(mr, "model_dump"):
+            mr = mr.model_dump()
 
         # Extract data masking (same V2 JSON message array format)
         masked_query = original_query
         entities_masked = []
-        if mr and mr.input_masking and mr.input_masking.data:
-            masked_template = mr.input_masking.data.get("masked_template", "")
+        input_masking = mr.get("input_masking") if isinstance(mr, dict) else None
+        if input_masking and input_masking.get("data"):
+            masked_template = input_masking["data"].get("masked_template", "")
             entities_masked = list(set(re.findall(r"MASKED_(\w+)", masked_template)))
             try:
                 masked_messages = json.loads(masked_template)
@@ -622,12 +655,15 @@ Instructions:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        # Extract input filtering scores
+        # Extract input filtering scores — the real Azure Content Safety scores
         input_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": False}
-        if mr and mr.input_filtering:
-            passed = "passed" in (getattr(mr.input_filtering, "message", "") or "").lower()
-            if mr.input_filtering.data:
-                azure_scores = mr.input_filtering.data.get("azure_content_safety", {})
+        input_filtering = mr.get("input_filtering") if isinstance(mr, dict) else None
+        if input_filtering:
+            filter_msg = input_filtering.get("message", "") or ""
+            passed = "passed" in filter_msg.lower()
+            filter_data = input_filtering.get("data")
+            if filter_data:
+                azure_scores = filter_data.get("azure_content_safety", {})
                 input_filter = {
                     "hate": azure_scores.get("hate", 0),
                     "self_harm": azure_scores.get("self_harm", 0),
@@ -641,16 +677,21 @@ Instructions:
 
         # Extract messages (post-masking if available)
         messages_to_llm = []
-        if entities_masked and mr and mr.input_masking and mr.input_masking.data:
+        if entities_masked and input_masking and input_masking.get("data"):
             try:
-                masked_messages = json.loads(mr.input_masking.data.get("masked_template", ""))
+                masked_messages = json.loads(input_masking["data"].get("masked_template", ""))
                 for msg in masked_messages:
                     messages_to_llm.append({"role": msg["role"], "content": msg["content"]})
             except (json.JSONDecodeError, TypeError, KeyError):
                 pass
-        if not messages_to_llm and mr and mr.templating:
-            for msg in mr.templating:
-                messages_to_llm.append({"role": msg.role, "content": msg.content})
+        if not messages_to_llm:
+            templating = mr.get("templating") if isinstance(mr, dict) else None
+            if templating:
+                for msg in templating:
+                    if isinstance(msg, dict):
+                        messages_to_llm.append({"role": msg.get("role", ""), "content": msg.get("content", "")})
+                    else:
+                        messages_to_llm.append({"role": msg.role, "content": msg.content})
 
         return {
             "data_masking": {
