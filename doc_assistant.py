@@ -32,35 +32,36 @@ from knowledge_base import (
     get_services_summary,
 )
 
-# Lazy imports for GenAI Hub Orchestration SDK (may not be available locally)
+# Lazy imports for GenAI Hub Orchestration SDK V2 (may not be available locally)
 try:
-    from gen_ai_hub.orchestration.service import OrchestrationService
-    from gen_ai_hub.orchestration.models.message import (
+    from gen_ai_hub.orchestration_v2.service import OrchestrationService
+    from gen_ai_hub.orchestration_v2.models.message import (
         SystemMessage,
         UserMessage,
-        AssistantMessage,
-        ToolMessage,
+        ToolChatMessage,
     )
-    from gen_ai_hub.orchestration.models.template import Template, TemplateValue
-    from gen_ai_hub.orchestration.models.llm import LLM
-    from gen_ai_hub.orchestration.models.config import OrchestrationConfig
-    from gen_ai_hub.orchestration.models.response_format import ResponseFormatJsonSchema
-    from gen_ai_hub.orchestration.models.content_filtering import (
-        ContentFiltering,
+    from gen_ai_hub.orchestration_v2.models.template import Template, PromptTemplatingModuleConfig
+    from gen_ai_hub.orchestration_v2.models.llm_model_details import LLMModelDetails
+    from gen_ai_hub.orchestration_v2.models.config import ModuleConfig, OrchestrationConfig
+    from gen_ai_hub.orchestration_v2.models.response_format import ResponseFormatJsonSchema, JSONResponseSchema
+    from gen_ai_hub.orchestration_v2.models.content_filtering import (
+        ContentFilter,
+        FilteringModuleConfig,
         InputFiltering,
         OutputFiltering,
     )
-    from gen_ai_hub.orchestration.models.azure_content_filter import (
+    from gen_ai_hub.orchestration_v2.models.azure_content_filter import (
         AzureContentFilter,
         AzureThreshold,
     )
-    from gen_ai_hub.orchestration.models.data_masking import DataMasking
-    from gen_ai_hub.orchestration.models.sap_data_privacy_integration import (
-        SAPDataPrivacyIntegration,
+    from gen_ai_hub.orchestration_v2.models.data_masking import (
+        MaskingModuleConfig,
+        MaskingProviderConfig,
         MaskingMethod,
         ProfileEntity,
+        DPIStandardEntity,
     )
-    from gen_ai_hub.orchestration.exceptions import OrchestrationError
+    from gen_ai_hub.orchestration_v2.exceptions import OrchestrationError
 
     GENAI_HUB_AVAILABLE = True
 except ImportError:
@@ -120,7 +121,7 @@ class DocAssistant:
         services_summary = get_services_summary()
 
         return Template(
-            messages=[
+            template=[
                 SystemMessage(
                     content=f"""You are an SAP AI documentation expert assistant.
 Your job is to help users find relevant SAP documentation and provide detailed explanations.
@@ -143,39 +144,44 @@ Instructions:
             ],
             tools=[SEARCH_TOOL],
             response_format=ResponseFormatJsonSchema(
-                name="doc_assistant_result",
-                description="Documentation assistant structured response",
-                schema=ASSISTANT_SCHEMA,
+                json_schema=JSONResponseSchema(
+                    name="doc_assistant_result",
+                    description="Documentation assistant structured response",
+                    schema=ASSISTANT_SCHEMA,
+                ),
             ),
         )
 
-    def _create_content_filter(self) -> "ContentFiltering":
+    def _create_content_filter(self) -> "FilteringModuleConfig":
         """Configure Azure Content Safety filtering for input and output."""
-        azure_filter = AzureContentFilter(
+        azure_config = AzureContentFilter(
             hate=AzureThreshold.ALLOW_SAFE,
             violence=AzureThreshold.ALLOW_SAFE,
             self_harm=AzureThreshold.ALLOW_SAFE,
             sexual=AzureThreshold.ALLOW_SAFE,
         )
+        content_filter = ContentFilter(type="azure_content_safety", config=azure_config)
 
-        return ContentFiltering(
-            input_filtering=InputFiltering(filters=[azure_filter]),
-            output_filtering=OutputFiltering(filters=[azure_filter]),
+        return FilteringModuleConfig(
+            input=InputFiltering(filters=[content_filter]),
+            output=OutputFiltering(filters=[content_filter]),
         )
 
-    def _create_data_masking(self) -> "DataMasking":
+    def _create_data_masking(self) -> "MaskingModuleConfig":
         """Configure PII masking using SAP Data Privacy Integration."""
-        return DataMasking(
-            providers=[
-                SAPDataPrivacyIntegration(
+        return MaskingModuleConfig(
+            masking_providers=[
+                MaskingProviderConfig(
                     method=MaskingMethod.ANONYMIZATION,
                     entities=[
-                        ProfileEntity.PERSON,
-                        ProfileEntity.EMAIL,
-                        ProfileEntity.PHONE,
-                        ProfileEntity.ADDRESS,
-                        ProfileEntity.SAP_IDS_INTERNAL,
-                        ProfileEntity.SAP_IDS_PUBLIC,
+                        DPIStandardEntity(type=ProfileEntity.PERSON),
+                        DPIStandardEntity(type=ProfileEntity.ORG),
+                        DPIStandardEntity(type=ProfileEntity.EMAIL),
+                        DPIStandardEntity(type=ProfileEntity.PHONE),
+                        DPIStandardEntity(type=ProfileEntity.ADDRESS),
+                        DPIStandardEntity(type=ProfileEntity.USERNAME_PASSWORD),
+                        DPIStandardEntity(type=ProfileEntity.SAP_IDS_INTERNAL),
+                        DPIStandardEntity(type=ProfileEntity.SAP_IDS_PUBLIC),
                     ],
                 )
             ]
@@ -189,14 +195,23 @@ Instructions:
             return
 
         try:
-            config = OrchestrationConfig(
-                template=self._create_template(),
-                llm=LLM(name="gpt-4o", parameters={"max_tokens": 1000}),
-                filtering=self._create_content_filter(),
-                data_masking=self._create_data_masking(),
+            llm = LLMModelDetails(
+                name="gpt-4o",
+                params={"max_tokens": 1000},
+            )
+            prompt_template = PromptTemplatingModuleConfig(
+                prompt=self._create_template(),
+                model=llm,
+            )
+            self._config = OrchestrationConfig(
+                modules=ModuleConfig(
+                    prompt_templating=prompt_template,
+                    filtering=self._create_content_filter(),
+                    masking=self._create_data_masking(),
+                ),
             )
 
-            self._service = OrchestrationService(config=config)
+            self._service = OrchestrationService()
             logger.info("GenAI Hub Orchestration service initialized successfully")
         except Exception as e:
             logger.warning(f"Failed to initialize orchestration service: {e}")
@@ -257,16 +272,17 @@ Instructions:
 
         # First LLM call
         result = self._service.run(
-            template_values=[TemplateValue(name="user_question", value=question)]
+            config=self._config,
+            placeholder_values={"user_question": question},
         )
-        msg = result.orchestration_result.choices[0].message
+        msg = result.final_result.choices[0].message
 
         # Check if the LLM wants to call tools
         tool_calls = getattr(msg, "tool_calls", None)
 
         if tool_calls:
             # Build conversation history including the assistant's tool call request
-            history = list(result.module_results.templating)
+            history = list(result.intermediate_results.templating)
             history.append(msg)
 
             for tc in tool_calls:
@@ -276,7 +292,7 @@ Instructions:
 
                 # Add tool result to conversation history
                 history.append(
-                    ToolMessage(content=str(tool_result), tool_call_id=tc.id)
+                    ToolChatMessage(content=str(tool_result), tool_call_id=tc.id)
                 )
 
                 # Track for pipeline visibility
@@ -295,13 +311,14 @@ Instructions:
 
             # Second LLM call with tool results in context
             result = self._service.run(
-                template_values=[TemplateValue(name="user_question", value=question)],
+                config=self._config,
+                placeholder_values={"user_question": question},
                 history=history,
             )
 
         # Parse the final structured response
         llm_result = json.loads(
-            result.orchestration_result.choices[0].message.content
+            result.final_result.choices[0].message.content
         )
         response = self._format_response(llm_result)
 
@@ -349,7 +366,7 @@ Instructions:
 
     def _extract_pipeline_details(self, original_query: str, result) -> dict:
         """Extract pipeline processing details from orchestration result."""
-        mr = result.module_results
+        mr = result.intermediate_results
 
         # Extract masked query and entities from input_masking
         masked_query = original_query
@@ -357,50 +374,66 @@ Instructions:
         if mr.input_masking and mr.input_masking.data:
             masked_template = mr.input_masking.data.get("masked_template", "")
             entities_masked = list(set(re.findall(r"MASKED_(\w+)", masked_template)))
-            if "{{?user_question}}" not in masked_template:
-                # Try to extract the user question portion from the masked template
-                match = re.search(r"(?:user_question[\"']?\s*:\s*[\"']?)(.+?)(?:[\"']?\s*\}|$)", masked_template)
-                if match:
-                    masked_query = match.group(1).strip()
+            # V2 format: masked_template is a JSON array of message objects
+            try:
+                masked_messages = json.loads(masked_template)
+                for msg in masked_messages:
+                    if msg.get("role") == "user":
+                        masked_query = msg["content"]
+                        break
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-        # Extract messages sent to LLM from templating module
+        # Extract messages sent to LLM (post-masking if available, otherwise pre-masking)
         messages_to_llm = []
-        if mr.templating:
+        if entities_masked and mr.input_masking and mr.input_masking.data:
+            # Use masked messages — what the LLM actually received
+            try:
+                masked_messages = json.loads(mr.input_masking.data.get("masked_template", ""))
+                for msg in masked_messages:
+                    messages_to_llm.append({"role": msg["role"], "content": msg["content"]})
+            except (json.JSONDecodeError, TypeError, KeyError):
+                pass
+        if not messages_to_llm and mr.templating:
             for msg in mr.templating:
                 messages_to_llm.append({"role": msg.role, "content": msg.content})
 
-        # Extract content filtering scores
+        # Extract content filtering scores (V2 uses lowercase keys)
         input_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True}
         output_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True}
 
-        if mr.input_filtering and mr.input_filtering.data:
-            azure_scores = mr.input_filtering.data.get("azure_content_safety", {})
-            input_filter = {
-                "hate": azure_scores.get("Hate", 0),
-                "self_harm": azure_scores.get("SelfHarm", 0),
-                "sexual": azure_scores.get("Sexual", 0),
-                "violence": azure_scores.get("Violence", 0),
-                "passed": True,
-            }
-
-        if mr.output_filtering and mr.output_filtering.data:
-            choices = mr.output_filtering.data.get("choices", [{}])
-            if choices:
-                azure_scores = choices[0].get("azure_content_safety", {})
-                output_filter = {
-                    "hate": azure_scores.get("Hate", 0),
-                    "self_harm": azure_scores.get("SelfHarm", 0),
-                    "sexual": azure_scores.get("Sexual", 0),
-                    "violence": azure_scores.get("Violence", 0),
-                    "passed": True,
+        if mr.input_filtering:
+            passed = "passed" in (getattr(mr.input_filtering, "message", "") or "").lower()
+            if mr.input_filtering.data:
+                azure_scores = mr.input_filtering.data.get("azure_content_safety", {})
+                input_filter = {
+                    "hate": azure_scores.get("hate", 0),
+                    "self_harm": azure_scores.get("self_harm", 0),
+                    "sexual": azure_scores.get("sexual", 0),
+                    "violence": azure_scores.get("violence", 0),
+                    "passed": passed,
                 }
 
+        if mr.output_filtering:
+            passed = "passed" in (getattr(mr.output_filtering, "message", "") or "").lower()
+            if mr.output_filtering.data:
+                choices = mr.output_filtering.data.get("choices", [{}])
+                if choices:
+                    azure_scores = choices[0].get("azure_content_safety", {})
+                    output_filter = {
+                        "hate": azure_scores.get("hate", 0),
+                        "self_harm": azure_scores.get("self_harm", 0),
+                        "sexual": azure_scores.get("sexual", 0),
+                        "violence": azure_scores.get("violence", 0),
+                        "passed": passed,
+                    }
+
         # Extract LLM details
-        orch = result.orchestration_result
+        final = result.final_result
         llm_details = {
-            "model": orch.model if hasattr(orch, "model") else "unknown",
-            "prompt_tokens": orch.usage.prompt_tokens if hasattr(orch, "usage") and orch.usage else 0,
-            "completion_tokens": orch.usage.completion_tokens if hasattr(orch, "usage") and orch.usage else 0,
+            "model": final.model if hasattr(final, "model") else "unknown",
+            "prompt_tokens": final.usage.prompt_tokens if hasattr(final, "usage") and final.usage else 0,
+            "completion_tokens": final.usage.completion_tokens if hasattr(final, "usage") and final.usage else 0,
         }
 
         return {
@@ -584,10 +617,10 @@ Instructions:
             filter_data = input_filtering.get("data", {})
             azure_scores = filter_data.get("azure_content_safety", {})
             input_filter = {
-                "hate": azure_scores.get("Hate", 0),
-                "self_harm": azure_scores.get("SelfHarm", 0),
-                "sexual": azure_scores.get("Sexual", 0),
-                "violence": azure_scores.get("Violence", 0),
+                "hate": azure_scores.get("hate", 0),
+                "self_harm": azure_scores.get("self_harm", 0),
+                "sexual": azure_scores.get("sexual", 0),
+                "violence": azure_scores.get("violence", 0),
                 "passed": False,
             }
 
