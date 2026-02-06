@@ -156,9 +156,9 @@ Instructions:
         """Configure Azure Content Safety filtering for input and output."""
         azure_config = AzureContentFilter(
             hate=AzureThreshold.ALLOW_SAFE,
-            violence=AzureThreshold.ALLOW_SAFE,
-            self_harm=AzureThreshold.ALLOW_SAFE,
-            sexual=AzureThreshold.ALLOW_SAFE,
+            violence=AzureThreshold.ALLOW_SAFE_LOW,
+            self_harm=AzureThreshold.ALLOW_SAFE_LOW_MEDIUM,
+            sexual=AzureThreshold.ALLOW_SAFE_LOW_MEDIUM,
         )
         content_filter = ContentFilter(type="azure_content_safety", config=azure_config)
 
