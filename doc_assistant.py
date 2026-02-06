@@ -600,38 +600,57 @@ Instructions:
         }
 
     def _extract_pipeline_from_error(self, original_query: str, error: "OrchestrationError") -> dict:
-        """Extract pipeline details from an OrchestrationError (e.g., content filter block)."""
-        mr = getattr(error, "module_results", {}) or {}
+        """Extract pipeline details from an OrchestrationError (e.g., content filter block).
 
+        V2 OrchestrationError exposes intermediate_results as a ModuleResults object
+        (same type as the success response), so we reuse the same extraction logic.
+        """
+        mr = getattr(error, "intermediate_results", None)
+
+        # Extract data masking (same V2 JSON message array format)
         masked_query = original_query
         entities_masked = []
-        input_masking = mr.get("input_masking", {})
-        if input_masking:
-            masking_data = input_masking.get("data", {})
-            masked_template = masking_data.get("masked_template", "")
+        if mr and mr.input_masking and mr.input_masking.data:
+            masked_template = mr.input_masking.data.get("masked_template", "")
             entities_masked = list(set(re.findall(r"MASKED_(\w+)", masked_template)))
+            try:
+                masked_messages = json.loads(masked_template)
+                for msg in masked_messages:
+                    if msg.get("role") == "user":
+                        masked_query = msg["content"]
+                        break
+            except (json.JSONDecodeError, TypeError):
+                pass
 
-        input_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True}
-        input_filtering = mr.get("input_filtering", {})
-        if input_filtering:
-            filter_data = input_filtering.get("data", {})
-            azure_scores = filter_data.get("azure_content_safety", {})
-            input_filter = {
-                "hate": azure_scores.get("hate", 0),
-                "self_harm": azure_scores.get("self_harm", 0),
-                "sexual": azure_scores.get("sexual", 0),
-                "violence": azure_scores.get("violence", 0),
-                "passed": False,
-            }
+        # Extract input filtering scores
+        input_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": False}
+        if mr and mr.input_filtering:
+            passed = "passed" in (getattr(mr.input_filtering, "message", "") or "").lower()
+            if mr.input_filtering.data:
+                azure_scores = mr.input_filtering.data.get("azure_content_safety", {})
+                input_filter = {
+                    "hate": azure_scores.get("hate", 0),
+                    "self_harm": azure_scores.get("self_harm", 0),
+                    "sexual": azure_scores.get("sexual", 0),
+                    "violence": azure_scores.get("violence", 0),
+                    "passed": passed,
+                }
 
+        # No output filtering when input is blocked
         output_filter = {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": False}
 
+        # Extract messages (post-masking if available)
         messages_to_llm = []
-        templating = mr.get("templating", [])
-        if templating:
-            for msg in templating:
-                if isinstance(msg, dict):
-                    messages_to_llm.append({"role": msg.get("role", ""), "content": msg.get("content", "")})
+        if entities_masked and mr and mr.input_masking and mr.input_masking.data:
+            try:
+                masked_messages = json.loads(mr.input_masking.data.get("masked_template", ""))
+                for msg in masked_messages:
+                    messages_to_llm.append({"role": msg["role"], "content": msg["content"]})
+            except (json.JSONDecodeError, TypeError, KeyError):
+                pass
+        if not messages_to_llm and mr and mr.templating:
+            for msg in mr.templating:
+                messages_to_llm.append({"role": msg.role, "content": msg.content})
 
         return {
             "data_masking": {
@@ -645,7 +664,13 @@ Instructions:
                 "input": input_filter,
                 "output": output_filter,
             },
-            "llm": {"model": "blocked", "prompt_tokens": 0, "completion_tokens": 0},
+            "llm": {
+                "model": "blocked",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "blocked_by": getattr(error, "location", "unknown"),
+                "reason": getattr(error, "message", ""),
+            },
             "messages_to_llm": messages_to_llm,
             "tool_calls": None,
         }
