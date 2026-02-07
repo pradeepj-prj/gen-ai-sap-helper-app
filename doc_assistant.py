@@ -194,6 +194,20 @@ Instructions:
             ]
         )
 
+    def _client_side_mask(self, text: str) -> tuple[str, list[str]]:
+        """Mask PII patterns not covered by SAP DPI (e.g. Singapore NRIC).
+
+        Returns:
+            Tuple of (masked_text, list_of_entity_labels_masked)
+        """
+        entities = []
+        # Singapore NRIC/FIN: letter + 7 digits + letter (e.g. S1234567D, G9876543K)
+        nric_pattern = r'\b[STFGM]\d{7}[A-Z]\b'
+        if re.search(nric_pattern, text):
+            text = re.sub(nric_pattern, 'MASKED_NRIC', text)
+            entities.append("NRIC")
+        return text, entities
+
     def _initialize_client(self):
         """Initialize the GenAI Hub Orchestration Service with all modules."""
         if not GENAI_HUB_AVAILABLE:
@@ -281,10 +295,13 @@ Instructions:
         """
         tool_call_details = []
 
+        # Client-side masking for patterns SAP DPI doesn't catch (e.g. Singapore NRIC)
+        masked_question, client_entities = self._client_side_mask(question)
+
         # First LLM call
         result = self._service.run(
             config=self._config,
-            placeholder_values={"user_question": question},
+            placeholder_values={"user_question": masked_question},
         )
         msg = result.final_result.choices[0].message
 
@@ -334,7 +351,9 @@ Instructions:
         response = self._format_response(llm_result)
 
         if include_pipeline:
-            response["pipeline"] = self._extract_pipeline_details(question, result)
+            response["pipeline"] = self._extract_pipeline_details(
+                question, result, client_masked_entities=client_entities
+            )
             response["pipeline"]["tool_calls"] = tool_call_details or None
 
         return response
@@ -398,7 +417,7 @@ Instructions:
                 trim = i
         return messages[:-trim] if trim else messages
 
-    def _extract_pipeline_details(self, original_query: str, result) -> dict:
+    def _extract_pipeline_details(self, original_query: str, result, client_masked_entities=None) -> dict:
         """Extract pipeline processing details from orchestration result."""
         mr = result.intermediate_results
 
@@ -417,6 +436,11 @@ Instructions:
                         break
             except (json.JSONDecodeError, TypeError):
                 pass
+
+        # Merge client-side masked entities (e.g. NRIC not caught by DPI)
+        if client_masked_entities:
+            entities_masked.extend(client_masked_entities)
+            entities_masked = list(dict.fromkeys(entities_masked))  # deduplicate, preserve order
 
         # Extract messages sent to LLM (post-masking if available, otherwise pre-masking)
         messages_to_llm = []
@@ -492,8 +516,18 @@ Instructions:
 
     def _mock_pipeline_details(self, question: str) -> dict:
         """Generate mock pipeline details for local testing."""
+        masked_question, client_entities = self._client_side_mask(question)
+
+        data_masking = None
+        if client_entities:
+            data_masking = {
+                "original_query": question,
+                "masked_query": masked_question,
+                "entities_masked": client_entities,
+            }
+
         return {
-            "data_masking": None,
+            "data_masking": data_masking,
             "content_filtering": {
                 "input": {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True},
                 "output": {"hate": 0, "self_harm": 0, "sexual": 0, "violence": 0, "passed": True},
@@ -501,12 +535,12 @@ Instructions:
             "llm": {"model": "mock", "prompt_tokens": 0, "completion_tokens": 0},
             "messages_to_llm": [
                 {"role": "system", "content": "[MOCK] System prompt would appear here"},
-                {"role": "user", "content": question},
+                {"role": "user", "content": masked_question},
             ],
             "tool_calls": [
                 {
                     "tool_name": "search_knowledge_base",
-                    "arguments": {"query": question},
+                    "arguments": {"query": masked_question},
                     "result_count": 3,
                     "results_preview": [
                         {"id": "mock_01", "title": "[MOCK] Matching doc 1"},

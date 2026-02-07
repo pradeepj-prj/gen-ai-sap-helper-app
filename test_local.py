@@ -438,6 +438,78 @@ def test_content_filtered_pipeline():
     print("\n✓ Content filtered pipeline passed\n")
 
 
+def test_client_side_masking():
+    """Test client-side NRIC/FIN masking in DocAssistant."""
+    print("=== Testing Client-Side NRIC Masking ===\n")
+
+    from doc_assistant import DocAssistant
+
+    assistant = DocAssistant()
+
+    # Test 1: Basic NRIC masking (S prefix — citizen born before 2000)
+    text, entities = assistant._client_side_mask("My NRIC is S1234567D and I need help.")
+    assert "S1234567D" not in text, "NRIC should be masked"
+    assert "MASKED_NRIC" in text, "Should contain MASKED_NRIC"
+    assert "NRIC" in entities, "Entities should include NRIC"
+    print("  ✓ Basic NRIC (S prefix) masked correctly")
+
+    # Test 2: FIN masking (G prefix — foreigner)
+    text, entities = assistant._client_side_mask("FIN: G9876543K")
+    assert "G9876543K" not in text
+    assert "MASKED_NRIC" in text
+    assert "NRIC" in entities
+    print("  ✓ FIN (G prefix) masked correctly")
+
+    # Test 3: T prefix (citizen born 2000+)
+    text, entities = assistant._client_side_mask("ID T0012345J")
+    assert "T0012345J" not in text
+    assert "MASKED_NRIC" in text
+    print("  ✓ NRIC (T prefix) masked correctly")
+
+    # Test 4: M prefix (foreigner 2022+)
+    text, entities = assistant._client_side_mask("Number M1234567X")
+    assert "M1234567X" not in text
+    assert "MASKED_NRIC" in text
+    print("  ✓ FIN (M prefix) masked correctly")
+
+    # Test 5: Multiple NRICs in one string
+    text, entities = assistant._client_side_mask("IDs: S1234567D and F9876543N")
+    assert "S1234567D" not in text
+    assert "F9876543N" not in text
+    assert text.count("MASKED_NRIC") == 2
+    assert entities == ["NRIC"]  # only one label, not duplicated
+    print("  ✓ Multiple NRICs masked, single entity label")
+
+    # Test 6: No NRIC — passthrough unchanged
+    text, entities = assistant._client_side_mask("How do I deploy a model on AI Core?")
+    assert text == "How do I deploy a model on AI Core?"
+    assert entities == []
+    print("  ✓ Non-NRIC text passed through unchanged")
+
+    # Test 7: Mock pipeline integration — NRIC in question shows in pipeline
+    result = assistant.ask("My NRIC is S1234567D. How do I deploy?", include_pipeline=True)
+    pipeline = result["pipeline"]
+    assert pipeline["data_masking"] is not None, "Pipeline should show data_masking"
+    assert "NRIC" in pipeline["data_masking"]["entities_masked"]
+    assert "S1234567D" not in pipeline["data_masking"]["masked_query"]
+    assert "MASKED_NRIC" in pipeline["data_masking"]["masked_query"]
+    assert "S1234567D" in pipeline["data_masking"]["original_query"]
+    # Verify user message to LLM also has NRIC masked
+    user_msgs = [m for m in pipeline["messages_to_llm"] if m["role"] == "user"]
+    assert any("MASKED_NRIC" in m["content"] for m in user_msgs), \
+        "User message to LLM should contain MASKED_NRIC"
+    print("  ✓ Mock pipeline shows NRIC masking in data_masking details")
+
+    # Test 8: Question without NRIC — NRIC should not appear in entities
+    result = assistant.ask("How do I deploy?", include_pipeline=True)
+    if result["pipeline"]["data_masking"] is not None:
+        assert "NRIC" not in result["pipeline"]["data_masking"]["entities_masked"], \
+            "NRIC should not appear in entities for non-NRIC question"
+    print("  ✓ Non-NRIC question: no NRIC in entities_masked")
+
+    print("\n✓ Client-side NRIC masking passed\n")
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("SAP AI Documentation Assistant - Local Tests")
@@ -455,6 +527,7 @@ if __name__ == "__main__":
     test_pipeline_visibility()
     test_empty_query()
     test_content_filtered_pipeline()
+    test_client_side_masking()
 
     print("=" * 60)
     print("TEST SUMMARY: " + ("ALL PASSED ✓" if success else "SOME FAILED ✗"))
