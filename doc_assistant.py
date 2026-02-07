@@ -201,10 +201,10 @@ Instructions:
             Tuple of (masked_text, list_of_entity_labels_masked)
         """
         entities = []
-        # Singapore NRIC/FIN: letter + 7 digits + letter (e.g. S1234567D, G9876543K)
+        # Singapore NRIC/FIN: letter + 7 digits + letter (e.g. S1234567D, g9876543k)
         nric_pattern = r'\b[STFGM]\d{7}[A-Z]\b'
-        if re.search(nric_pattern, text):
-            text = re.sub(nric_pattern, 'MASKED_NRIC', text)
+        if re.search(nric_pattern, text, re.IGNORECASE):
+            text = re.sub(nric_pattern, 'MASKED_NRIC', text, flags=re.IGNORECASE)
             entities.append("NRIC")
         return text, entities
 

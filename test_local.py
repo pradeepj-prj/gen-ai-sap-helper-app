@@ -472,7 +472,20 @@ def test_client_side_masking():
     assert "MASKED_NRIC" in text
     print("  ✓ FIN (M prefix) masked correctly")
 
-    # Test 5: Multiple NRICs in one string
+    # Test 5: Case-insensitive matching (lowercase)
+    text, entities = assistant._client_side_mask("my nric is s1234567d")
+    assert "s1234567d" not in text
+    assert "MASKED_NRIC" in text
+    assert "NRIC" in entities
+    print("  ✓ Lowercase NRIC masked correctly")
+
+    # Test 5b: Mixed case
+    text, entities = assistant._client_side_mask("FIN: g9876543K")
+    assert "g9876543K" not in text
+    assert "MASKED_NRIC" in text
+    print("  ✓ Mixed-case NRIC masked correctly")
+
+    # Test 6: Multiple NRICs in one string
     text, entities = assistant._client_side_mask("IDs: S1234567D and F9876543N")
     assert "S1234567D" not in text
     assert "F9876543N" not in text
