@@ -182,6 +182,10 @@ Instructions:
                         DPIStandardEntity(type=ProfileEntity.USERNAME_PASSWORD),
                         DPIStandardEntity(type=ProfileEntity.SAP_IDS_INTERNAL),
                         DPIStandardEntity(type=ProfileEntity.SAP_IDS_PUBLIC),
+                        DPIStandardEntity(type=ProfileEntity.NATIONAL_ID),
+                        DPIStandardEntity(type=ProfileEntity.SSN),
+                        DPIStandardEntity(type=ProfileEntity.PASSPORT),
+                        DPIStandardEntity(type=ProfileEntity.DRIVING_LICENSE),
                     ],
                 )
             ]
