@@ -2,7 +2,7 @@
 applications:
   - name: sap-ai-doc-assistant
     memory: 512M
-    disk_quota: 512M
+    disk_quota: 1G
     instances: 1
     buildpacks:
       - python_buildpack
@@ -12,5 +12,6 @@ applications:
     timeout: 120
     env:
       PYTHON_VERSION: 3.11.x
+      AICORE_RESOURCE_GROUP: default
     services:
       - default_aicore  # Bind to existing AI Core service instance
