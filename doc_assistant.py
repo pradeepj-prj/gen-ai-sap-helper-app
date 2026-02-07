@@ -186,6 +186,9 @@ Instructions:
                         DPIStandardEntity(type=ProfileEntity.SSN),
                         DPIStandardEntity(type=ProfileEntity.PASSPORT),
                         DPIStandardEntity(type=ProfileEntity.DRIVING_LICENSE),
+                        DPIStandardEntity(type=ProfileEntity.IBAN),
+                        DPIStandardEntity(type=ProfileEntity.CREDIT_CARD_NUMBER),
+                        DPIStandardEntity(type=ProfileEntity.SENSITIVE_DATA),
                     ],
                 )
             ]
