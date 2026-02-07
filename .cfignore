@@ -1,0 +1,14 @@
+# Tests & docs (not needed at runtime)
+test_local.py
+README.md
+API_REFERENCE.md
+CODE_REPORT.md
+SDK_BUG_REPORT.md
+CF_COMMANDS.md
+CLAUDE.md
+
+# Dev files
+.env
+.env.example
+.git/
+.gitignore
